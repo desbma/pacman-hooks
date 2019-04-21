@@ -17,7 +17,7 @@ fn get_aur_packages() -> Vec<String> {
         panic!();
     }
 
-    Vec::from_iter(output.stdout.lines().map(|l| l.unwrap()))
+    Vec::from_iter(output.stdout.lines().map(std::result::Result::unwrap))
 }
 
 fn get_package_executable_files(package: &String) -> VecDeque<String> {
