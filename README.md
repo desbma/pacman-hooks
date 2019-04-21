@@ -28,7 +28,7 @@ This is roughly equivalent to the following Bash code:
       done
     done
 
-However is written is Rust and uses a thread pool for **much faster** processing (runs in ~1.3s on my machine with ~90 AUR packages, compared to ~14s for the above Bash code).
+However it is written is Rust and uses a thread pool for **much faster** processing (runs in ~1.3s on my machine with ~90 AUR packages, compared to ~14s for the above Bash code).
 
 
 ### cinnamon-tweaks
