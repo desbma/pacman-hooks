@@ -150,3 +150,85 @@ fn main() {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::fs::{File, Permissions};
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    use tempdir::TempDir;
+
+    use super::*;
+
+    fn update_path(dir: &str) -> std::ffi::OsString {
+        let path_orig = env::var_os("PATH").unwrap();
+
+        let mut paths_vec = env::split_paths(&path_orig).collect::<Vec<_>>();
+        paths_vec.insert(0, PathBuf::from(dir));
+
+        let paths = env::join_paths(paths_vec).unwrap();
+        env::set_var("PATH", &paths);
+
+        path_orig
+    }
+
+    #[test]
+    fn test_get_missing_dependencies() {
+        let ldd_output = "	linux-vdso.so.1 (0x00007ffea89a7000)
+	libavdevice.so.57 => not found
+	libavfilter.so.6 => not found
+	libavformat.so.57 => not found
+	libavcodec.so.57 => not found
+	libavresample.so.3 => not found
+	libpostproc.so.54 => not found
+	libswresample.so.2 => not found
+	libswscale.so.4 => not found
+	libavutil.so.55 => not found
+	libm.so.6 => /usr/lib/libm.so.6 (0x00007f4bd9cc3000)
+	libpthread.so.0 => /usr/lib/libpthread.so.0 (0x00007f4bd9ca2000)
+	libc.so.6 => /usr/lib/libc.so.6 (0x00007f4bd9add000)
+	/lib64/ld-linux-x86-64.so.2 => /usr/lib64/ld-linux-x86-64.so.2 (0x00007f4bda08d000)
+";
+
+        let tmp_dir = TempDir::new("").unwrap();
+
+        let output_filepath = tmp_dir.path().join("output.txt");
+        let mut output_file = File::create(&output_filepath).unwrap();
+        output_file.write_all(ldd_output.as_bytes()).unwrap();
+        drop(output_file);
+
+        let fake_ldd_filepath = tmp_dir.path().join("ldd");
+        let mut fake_ldd_file = File::create(fake_ldd_filepath).unwrap();
+        write!(
+            &mut fake_ldd_file,
+            "#!/bin/sh\ncat {}",
+            output_filepath.into_os_string().into_string().unwrap()
+        )
+        .unwrap();
+        fake_ldd_file
+            .set_permissions(Permissions::from_mode(0o777))
+            .unwrap();
+        drop(fake_ldd_file);
+
+        let path_orig = update_path(tmp_dir.path().to_str().unwrap());
+
+        assert_eq!(
+            get_missing_dependencies("dummy"),
+            [
+                "libavdevice.so.57",
+                "libavfilter.so.6",
+                "libavformat.so.57",
+                "libavcodec.so.57",
+                "libavresample.so.3",
+                "libpostproc.so.54",
+                "libswresample.so.2",
+                "libswscale.so.4",
+                "libavutil.so.55"
+            ]
+        );
+
+        env::set_var("PATH", &path_orig);
+    }
+}
