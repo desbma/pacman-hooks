@@ -10,6 +10,11 @@ use std::sync::Arc;
 use crossbeam::thread;
 use log::debug;
 
+type CrossbeamChannel<T> = (
+    crossbeam::channel::Sender<T>,
+    crossbeam::channel::Receiver<T>,
+);
+
 fn get_aur_packages() -> Vec<String> {
     let output = Command::new("pacman").args(&["-Qqm"]).output().unwrap();
 
@@ -20,7 +25,7 @@ fn get_aur_packages() -> Vec<String> {
     Vec::from_iter(output.stdout.lines().map(std::result::Result::unwrap))
 }
 
-fn get_package_executable_files(package: &String) -> VecDeque<String> {
+fn get_package_executable_files(package: &str) -> VecDeque<String> {
     let mut files = VecDeque::new();
 
     let output = Command::new("pacman")
@@ -47,7 +52,7 @@ fn get_package_executable_files(package: &String) -> VecDeque<String> {
     files
 }
 
-fn get_missing_dependencies(binary: &String) -> VecDeque<String> {
+fn get_missing_dependencies(binary: &str) -> VecDeque<String> {
     let mut missing_deps = VecDeque::new();
 
     let output = Command::new("ldd").args(&[binary]).output().unwrap();
@@ -73,10 +78,8 @@ fn main() {
 
     thread::scope(|scope| {
         // Executable file channel
-        let (exec_files_tx, exec_files_rx): (
-            crossbeam::channel::Sender<(Arc<String>, Arc<String>)>,
-            crossbeam::channel::Receiver<(Arc<String>, Arc<String>)>,
-        ) = crossbeam::unbounded();
+        let (exec_files_tx, exec_files_rx): CrossbeamChannel<(Arc<String>, Arc<String>)> =
+            crossbeam::unbounded();
 
         // Executable files to missing deps workers
         for _ in 0..cpu_count {
@@ -105,10 +108,7 @@ fn main() {
             let aur_packages = get_aur_packages();
 
             // Package name channel
-            let (package_tx, package_rx): (
-                crossbeam::channel::Sender<Arc<String>>,
-                crossbeam::channel::Receiver<Arc<String>>,
-            ) = crossbeam::unbounded();
+            let (package_tx, package_rx): CrossbeamChannel<Arc<String>> = crossbeam::unbounded();
 
             // Package name to executable files workers
             let worker_count = cmp::min(cpu_count, aur_packages.len());
