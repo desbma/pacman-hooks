@@ -11,10 +11,7 @@ use crossbeam::thread;
 use log::debug;
 
 fn get_aur_packages() -> Vec<String> {
-    let output = Command::new("pacman")
-        .args(&["-Qqm"])
-        .output()
-        .unwrap();
+    let output = Command::new("pacman").args(&["-Qqm"]).output().unwrap();
 
     if !output.status.success() {
         panic!();
@@ -85,14 +82,16 @@ fn main() {
         for _ in 0..cpu_count {
             let exec_files_rx = exec_files_rx.clone();
             let missing_deps_tx = missing_deps_tx.clone();
-            scope.spawn(move |_| while let Ok((package, file)) = exec_files_rx.recv() {
-                debug!("exec_files_rx => {:?}", (&package, &file));
-                let missing_deps = get_missing_dependencies(&file);
-                for missing_dep in missing_deps {
-                    let to_send = (Arc::clone(&package), Arc::clone(&file), missing_dep);
-                    debug!("{:?} => missing_deps_tx", &to_send);
-                    if missing_deps_tx.send(to_send).is_err() {
-                        break;
+            scope.spawn(move |_| {
+                while let Ok((package, file)) = exec_files_rx.recv() {
+                    debug!("exec_files_rx => {:?}", (&package, &file));
+                    let missing_deps = get_missing_dependencies(&file);
+                    for missing_dep in missing_deps {
+                        let to_send = (Arc::clone(&package), Arc::clone(&file), missing_dep);
+                        debug!("{:?} => missing_deps_tx", &to_send);
+                        if missing_deps_tx.send(to_send).is_err() {
+                            break;
+                        }
                     }
                 }
             });
@@ -116,14 +115,16 @@ fn main() {
             for _ in 0..worker_count {
                 let package_rx = package_rx.clone();
                 let exec_files_tx = exec_files_tx.clone();
-                scope.spawn(move |_| while let Ok(package) = package_rx.recv() {
-                    debug!("package_rx => {:?}", package);
-                    let exec_files = get_package_executable_files(&package);
-                    for exec_file in exec_files {
-                        let to_send = (Arc::clone(&package), Arc::new(exec_file));
-                        debug!("{:?} => exec_files_tx", &to_send);
-                        if exec_files_tx.send(to_send).is_err() {
-                            break;
+                scope.spawn(move |_| {
+                    while let Ok(package) = package_rx.recv() {
+                        debug!("package_rx => {:?}", package);
+                        let exec_files = get_package_executable_files(&package);
+                        for exec_file in exec_files {
+                            let to_send = (Arc::clone(&package), Arc::new(exec_file));
+                            debug!("{:?} => exec_files_tx", &to_send);
+                            if exec_files_tx.send(to_send).is_err() {
+                                break;
+                            }
                         }
                     }
                 });
