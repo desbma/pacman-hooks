@@ -1,0 +1,9 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = Checking for package with missing dependencies
+Exec = /usr/bin/check-broken-packages
+When = PostTransaction

@@ -1,0 +1,11 @@
+--- /usr/share/cinnamon/theme/cinnamon.css.orig	2018-11-13 23:58:30.644449300 +0100
++++ /usr/share/cinnamon/theme/cinnamon.css	2018-11-13 23:58:43.834449196 +0100
+@@ -250,7 +250,7 @@
+ #panel {
+     color: #ffffff;
+     background-color: #555555;
+-    font-size: 8.5pt;
++    font-size: 9.5pt;
+     font-weight: normal;
+     height: 26px;
+     width: 32px;

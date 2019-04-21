@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = pacman-mirrorlist
+
+[Action]
+Description = Reviewing .pacnew files
+Exec = /usr/bin/pacdiff
+When = PostTransaction
+Depends = pacman-contrib

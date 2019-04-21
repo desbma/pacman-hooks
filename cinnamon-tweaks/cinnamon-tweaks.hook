@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cinnamon
+
+[Action]
+Description = Patch Cinnamon CSS
+When = PostTransaction
+Depends = patch
+Exec = /usr/bin/patch -f -b /usr/share/cinnamon/theme/cinnamon.css -i /usr/share/cinnamon/theme/cinnamon.css.patch

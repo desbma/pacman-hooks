@@ -1,0 +1,12 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Sync file system on /
+Exec = /usr/bin/sync -f /
+When = PostTransaction
+Depends = coreutils
