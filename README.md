@@ -28,7 +28,7 @@ This is roughly equivalent to the following Bash code:
       done
     done
 
-However is written is Rust and uses a thread pool for faster processing (about ~10x faster than the above code on my machine).
+However is written is Rust and uses a thread pool for **much faster** processing (runs in ~1.3s on my machine with ~90 AUR packages, compared to ~14s for the above Bash code).
 
 
 ### cinnamon-tweaks
@@ -54,6 +54,8 @@ Syncs `/` and `/boot` partitions when packages are installed, upgraded or remove
 
 ## Installation
 
+Install the [pacman-hooks-desbma-git AUR package](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/).
+Note that you probably want to edit files, or create your own package rather than directly install this one because some values are hardcoded for my own specific needs.
 
 
 ## License
