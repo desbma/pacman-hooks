@@ -4,7 +4,8 @@ Type = Package
 Target = *
 
 [Action]
-Description = Reviewing .pacnew files
-Exec = /usr/bin/pacdiff
+Description = Reviewing .pacnew and .pacsave files
+Exec = /bin/bash -c 'yes "v s" | tr " " "\n" | DIFFPROG=/usr/share/libalpm/scripts/pacdiff_diffprog pacdiff'
 When = PostTransaction
+Depends = git
 Depends = pacman-contrib
