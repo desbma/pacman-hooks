@@ -52,18 +52,20 @@ fn get_package_executable_files(package: &str) -> VecDeque<String> {
     files
 }
 
-fn get_missing_dependencies(binary: &str) -> VecDeque<String> {
+fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
     let mut missing_deps = VecDeque::new();
 
-    let output = Command::new("ldd").args(&[binary]).output().unwrap();
+    let output = Command::new("ldd").args(&[exec_file]).output().unwrap();
 
     if output.status.success() {
-        for line in output.stdout.lines() {
-            let line = line.unwrap();
-            if line.ends_with("=> not found") {
-                let dep = line.split(' ').next().unwrap().trim_start().to_string();
-                missing_deps.push_back(dep);
-            }
+        for missing_dep in output
+            .stdout
+            .lines()
+            .map(std::result::Result::unwrap)
+            .filter(|l| l.ends_with("=> not found"))
+            .map(|l| l.split(' ').next().unwrap().trim_start().to_string())
+        {
+            missing_deps.push_back(missing_dep);
         }
     }
 
