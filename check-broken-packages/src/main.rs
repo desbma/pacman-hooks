@@ -7,13 +7,27 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use std::sync::Arc;
 
-use crossbeam::thread;
+use crossbeam::thread as cb_thread;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
 
 type CrossbeamChannel<T> = (
     crossbeam::channel::Sender<T>,
     crossbeam::channel::Receiver<T>,
 );
+
+/// Executable file work unit for a worker thread to process
+#[derive(Debug)]
+struct ExecFileWork {
+    /// AUR package name
+    package: Arc<String>,
+
+    // Executable filepath
+    exec_filepath: Arc<String>,
+
+    /// True if this is the last executable filepath for the package (used to report progress)
+    package_last: bool,
+}
 
 fn get_aur_packages() -> Vec<String> {
     let output = Command::new("pacman").args(&["-Qqm"]).output().unwrap();
@@ -73,32 +87,51 @@ fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
 }
 
 fn main() {
+    // Init logger
     simple_logger::init().unwrap();
 
+    // Get usable core count
     let cpu_count = num_cpus::get();
+
+    // Get package names
+    let aur_packages = get_aur_packages();
+
+    // Init progressbar
+    let progress =
+        ProgressBar::with_draw_target(aur_packages.len() as u64, ProgressDrawTarget::stderr());
+    progress.set_style(
+        ProgressStyle::default_bar().template("Analyzing packages {wide_bar} {pos}/{len}"),
+    );
 
     // Missing deps channel
     let (missing_deps_tx, missing_deps_rx) = crossbeam::unbounded();
 
-    thread::scope(|scope| {
+    cb_thread::scope(|scope| {
         // Executable file channel
-        let (exec_files_tx, exec_files_rx): CrossbeamChannel<(Arc<String>, Arc<String>)> =
-            crossbeam::unbounded();
+        let (exec_files_tx, exec_files_rx): CrossbeamChannel<ExecFileWork> = crossbeam::unbounded();
 
         // Executable files to missing deps workers
         for _ in 0..cpu_count {
             let exec_files_rx = exec_files_rx.clone();
             let missing_deps_tx = missing_deps_tx.clone();
+            let progress = progress.clone();
             scope.spawn(move |_| {
-                while let Ok((package, file)) = exec_files_rx.recv() {
-                    debug!("exec_files_rx => {:?}", (&package, &file));
-                    let missing_deps = get_missing_dependencies(&file);
+                while let Ok(exec_file_work) = exec_files_rx.recv() {
+                    debug!("exec_files_rx => {:?}", &exec_file_work);
+                    let missing_deps = get_missing_dependencies(&exec_file_work.exec_filepath);
                     for missing_dep in missing_deps {
-                        let to_send = (Arc::clone(&package), Arc::clone(&file), missing_dep);
+                        let to_send = (
+                            Arc::clone(&exec_file_work.package),
+                            Arc::clone(&exec_file_work.exec_filepath),
+                            missing_dep,
+                        );
                         debug!("{:?} => missing_deps_tx", &to_send);
                         if missing_deps_tx.send(to_send).is_err() {
                             break;
                         }
+                    }
+                    if exec_file_work.package_last {
+                        progress.inc(1);
                     }
                 }
             });
@@ -107,10 +140,7 @@ fn main() {
         // Drop this end of the channel, workers have their own clone
         drop(missing_deps_tx);
 
-        thread::scope(|scope| {
-            // Get package names
-            let aur_packages = get_aur_packages();
-
+        cb_thread::scope(|scope| {
             // Package name channel
             let (package_tx, package_rx): CrossbeamChannel<Arc<String>> = crossbeam::unbounded();
 
@@ -119,12 +149,21 @@ fn main() {
             for _ in 0..worker_count {
                 let package_rx = package_rx.clone();
                 let exec_files_tx = exec_files_tx.clone();
+                let progress = progress.clone();
                 scope.spawn(move |_| {
                     while let Ok(package) = package_rx.recv() {
                         debug!("package_rx => {:?}", package);
                         let exec_files = get_package_executable_files(&package);
-                        for exec_file in exec_files {
-                            let to_send = (Arc::clone(&package), Arc::new(exec_file));
+                        if exec_files.is_empty() {
+                            progress.inc(1);
+                            continue;
+                        }
+                        for (i, exec_file) in exec_files.iter().enumerate() {
+                            let to_send = ExecFileWork {
+                                package: Arc::clone(&package),
+                                exec_filepath: Arc::new(exec_file.to_string()),
+                                package_last: i == exec_files.len() - 1,
+                            };
                             debug!("{:?} => exec_files_tx", &to_send);
                             if exec_files_tx.send(to_send).is_err() {
                                 break;
@@ -146,6 +185,8 @@ fn main() {
         .unwrap();
     })
     .unwrap();
+
+    progress.finish_and_clear();
 
     for (package, file, missing_dep) in missing_deps_rx.iter() {
         println!(
