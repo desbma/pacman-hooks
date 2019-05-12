@@ -7,6 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use std::sync::Arc;
 
+use ansi_term::Colour::*;
 use crossbeam::thread as cb_thread;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
@@ -190,8 +191,11 @@ fn main() {
 
     for (package, file, missing_dep) in missing_deps_rx.iter() {
         println!(
-            "File '{}' from package '{}' is missing dependency '{}'",
-            file, package, missing_dep
+            "{}",
+            Yellow.paint(format!(
+                "File '{}' from package '{}' is missing dependency '{}'",
+                file, package, missing_dep
+            ))
         );
     }
 }
