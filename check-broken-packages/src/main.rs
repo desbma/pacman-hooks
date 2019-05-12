@@ -73,6 +73,8 @@ fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
 }
 
 fn main() {
+    simple_logger::init().unwrap();
+
     let cpu_count = num_cpus::get();
 
     // Missing deps channel

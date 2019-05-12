@@ -9,7 +9,8 @@ panic = "abort"
 
 [dependencies]
 crossbeam = "0.7.1"
-log = "0.4"
+log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
+simple_logger = { version = "1.2.0", default-features = false }
 num_cpus = "1.10.0"
 
 [dev-dependencies]
