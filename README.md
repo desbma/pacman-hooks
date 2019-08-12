@@ -1,6 +1,10 @@
 Pacman hooks
 ============
 
+[![Build status](https://img.shields.io/travis/desbma/pacman-hooks/master.svg?style=flat)](https://travis-ci.org/desbma/pacman-hooks)
+[![AUR version](https://img.shields.io/aur/version/pacman-hooks-desbma-git.svg?style=flat)](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/)
+[![License](https://img.shields.io/github/license/desbma/pacman-hooks.svg?style=flat)](https://github.com/desbma/pacman-hooks/blob/master/LICENSE)
+
 Some Arch Linux Pacman hooks I wrote for y own use.
 
 
