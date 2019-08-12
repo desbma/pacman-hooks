@@ -1,2 +1,2 @@
 #!/bin/sh
-git diff --color=always -u $@ | /usr/share/git/diff-highlight/diff-highlight
+git diff --no-index --color=always -u $@ | /usr/share/git/diff-highlight/diff-highlight
