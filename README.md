@@ -35,11 +35,6 @@ This is roughly equivalent to the following Bash code:
 However it is written in Rust and uses a thread pool for **much faster** processing (runs in ~1.3s on my machine with ~90 AUR packages, compared to ~14s for the above Bash code).
 
 
-### cinnamon-tweaks
-
-Automatically patches [Cinnamon](https://github.com/linuxmint/Cinnamon) CSS at installation or upgrade to increase panel font size.
-
-
 ### pacdiff
 
 Automatically run `pacdiff` after an upgrade to review pacnew files.
