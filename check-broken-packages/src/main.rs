@@ -92,10 +92,6 @@ fn get_package_owning_path(path: &str) -> VecDeque<String> {
         .output()
         .unwrap();
 
-    if !output.status.success() {
-        panic!();
-    }
-
     output
         .stdout
         .lines()
