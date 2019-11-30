@@ -1,14 +1,18 @@
 use std::cmp;
 use std::collections::VecDeque;
+use std::fmt;
 use std::fs;
 use std::io::BufRead;
 use std::iter::FromIterator;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
+use std::str::FromStr;
 use std::sync::Arc;
+use std::thread;
 
 use ansi_term::Colour::*;
 use crossbeam::thread as cb_thread;
+use glob::glob;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
 
@@ -28,6 +32,108 @@ struct ExecFileWork {
 
     /// True if this is the last executable filepath for the package (used to report progress)
     package_last: bool,
+}
+
+struct PythonPackageVersion {
+    major: u8,
+    minor: u8,
+    release: u8,
+    package: u8,
+}
+
+impl fmt::Debug for PythonPackageVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}-{}",
+            self.major, self.minor, self.release, self.package
+        )
+    }
+}
+
+fn get_python_version() -> PythonPackageVersion {
+    let output = Command::new("pacman")
+        .args(&["-Qi", "python"])
+        .env("LANG", "C")
+        .output()
+        .unwrap();
+
+    if !output.status.success() {
+        panic!();
+    }
+
+    let version_str = output
+        .stdout
+        .lines()
+        .map(std::result::Result::unwrap)
+        .filter(|l| l.starts_with("Version"))
+        .map(|l| l.split(':').nth(1).unwrap().trim_start().to_string())
+        .next()
+        .unwrap();
+
+    let mut dot_iter = version_str.split('.');
+    let major = u8::from_str(dot_iter.next().unwrap()).unwrap();
+    let minor = u8::from_str(dot_iter.next().unwrap()).unwrap();
+    let mut dash_iter = dot_iter.next().unwrap().split('-');
+    let release = u8::from_str(dash_iter.next().unwrap()).unwrap();
+    let package = u8::from_str(dash_iter.next().unwrap()).unwrap();
+
+    PythonPackageVersion {
+        major,
+        minor,
+        release,
+        package,
+    }
+}
+
+fn get_package_owning_path(path: &str) -> VecDeque<String> {
+    let output = Command::new("pacman")
+        .args(&["-Qoq", path])
+        .output()
+        .unwrap();
+
+    if !output.status.success() {
+        panic!();
+    }
+
+    output
+        .stdout
+        .lines()
+        .map(std::result::Result::unwrap)
+        .collect()
+}
+
+fn get_broken_python_packages(
+    current_python_version: &PythonPackageVersion,
+) -> VecDeque<(String, String)> {
+    let mut packages = VecDeque::new();
+
+    let current_python_dir = format!(
+        "/usr/lib/python{}.{}",
+        current_python_version.major, current_python_version.minor
+    );
+
+    for python_dir_entry in
+        glob(&format!("/usr/lib/python{}*", current_python_version.major)).unwrap()
+    {
+        let python_dir = python_dir_entry
+            .unwrap()
+            .into_os_string()
+            .into_string()
+            .unwrap();
+
+        if python_dir != current_python_dir {
+            let dir_packages = get_package_owning_path(&python_dir);
+            for package in dir_packages {
+                let couple = (package, python_dir.clone());
+                if !packages.contains(&couple) {
+                    packages.push_back(couple);
+                }
+            }
+        }
+    }
+
+    packages
 }
 
 fn get_aur_packages() -> Vec<String> {
@@ -90,6 +196,20 @@ fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
 fn main() {
     // Init logger
     simple_logger::init().unwrap();
+
+    // Python broken packages channel
+    let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam::unbounded();
+    thread::Builder::new()
+        .spawn(move || {
+            let current_python_version = get_python_version();
+            debug!("Python version: {:?}", current_python_version);
+
+            let broken_python_packages = get_broken_python_packages(&current_python_version);
+            python_broken_packages_tx
+                .send(broken_python_packages)
+                .unwrap();
+        })
+        .unwrap();
 
     // Get usable core count
     let cpu_count = num_cpus::get();
@@ -195,6 +315,17 @@ fn main() {
             Yellow.paint(format!(
                 "File '{}' from package '{}' is missing dependency '{}'",
                 file, package, missing_dep
+            ))
+        );
+    }
+
+    let broken_python_packages = python_broken_packages_rx.recv().unwrap();
+    for (broken_python_package, dir) in broken_python_packages {
+        println!(
+            "{}",
+            Yellow.paint(format!(
+                "Package '{}' has files in directory '{}' that are ignored by the current Python interpreter",
+                broken_python_package, dir
             ))
         );
     }
