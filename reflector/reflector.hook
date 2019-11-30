@@ -7,6 +7,4 @@ Target = pacman-mirrorlist
 Description = Updating pacman-mirrorlist with reflector
 When = PostTransaction
 Depends = reflector
-Exec = /bin/reflector --verbose --threads 16 -c fr -c de -c gb -a 18 --completion-percent 100 -p https --sort rate --save /etc/pacman.d/mirrorlist
-# this avoids triggering the pacdiff hook
-Exec = /bin/bash -c 'test -f /etc/pacman.d/mirrorlist.pacnew && mv -v /etc/pacman.d/mirrorlist.{pacnew,orig} || true'
+Exec = /bin/bash -c 'reflector --verbose --threads 16 -c fr -c de -c gb -a 18 --completion-percent 100 -p https --sort rate --save /etc/pacman.d/mirrorlist; test -f /etc/pacman.d/mirrorlist.pacnew && mv -v /etc/pacman.d/mirrorlist.{pacnew,orig} || true'
