@@ -1,5 +1,6 @@
 use std::cmp;
 use std::collections::VecDeque;
+use std::error;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
@@ -15,6 +16,7 @@ use crossbeam::thread as cb_thread;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
+use simple_error::SimpleError;
 
 type CrossbeamChannel<T> = (
     crossbeam::channel::Sender<T>,
@@ -41,7 +43,7 @@ struct PythonPackageVersion {
     package: u8,
 }
 
-impl fmt::Debug for PythonPackageVersion {
+impl fmt::Display for PythonPackageVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -51,15 +53,16 @@ impl fmt::Debug for PythonPackageVersion {
     }
 }
 
-fn get_python_version() -> PythonPackageVersion {
+fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
     let output = Command::new("pacman")
         .args(&["-Qi", "python"])
         .env("LANG", "C")
-        .output()
-        .unwrap();
+        .output()?;
 
     if !output.status.success() {
-        panic!();
+        return Err(Box::new(SimpleError::new(
+            "Failed to query Python version with pacman",
+        )));
     }
 
     let version_str = output
@@ -69,39 +72,53 @@ fn get_python_version() -> PythonPackageVersion {
         .filter(|l| l.starts_with("Version"))
         .map(|l| l.split(':').nth(1).unwrap().trim_start().to_string())
         .next()
-        .unwrap();
+        .ok_or_else(|| {
+            SimpleError::new("Unexpected pacman output: unable to find Python version")
+        })?;
 
     let mut dot_iter = version_str.split('.');
-    let major = u8::from_str(dot_iter.next().unwrap()).unwrap();
-    let minor = u8::from_str(dot_iter.next().unwrap()).unwrap();
-    let mut dash_iter = dot_iter.next().unwrap().split('-');
-    let release = u8::from_str(dash_iter.next().unwrap()).unwrap();
-    let package = u8::from_str(dash_iter.next().unwrap()).unwrap();
+    let major = u8::from_str(dot_iter.next().ok_or_else(|| {
+        SimpleError::new("Unexpected pacman output: unable to parse Python version major part")
+    })?)?;
+    let minor = u8::from_str(dot_iter.next().ok_or_else(|| {
+        SimpleError::new("Unexpected pacman output: unable to parse Python version minor part")
+    })?)?;
+    let mut dash_iter = dot_iter
+        .next()
+        .ok_or_else(|| {
+            SimpleError::new(
+                "Unexpected pacman output: unable to parse Python version release/package part",
+            )
+        })?
+        .split('-');
+    let release = u8::from_str(dash_iter.next().ok_or_else(|| {
+        SimpleError::new("Unexpected pacman output: unable to parse Python version release part")
+    })?)?;
+    let package = u8::from_str(dash_iter.next().ok_or_else(|| {
+        SimpleError::new("Unexpected pacman output: unable to parse Python version package part")
+    })?)?;
 
-    PythonPackageVersion {
+    Ok(PythonPackageVersion {
         major,
         minor,
         release,
         package,
-    }
+    })
 }
 
-fn get_package_owning_path(path: &str) -> VecDeque<String> {
-    let output = Command::new("pacman")
-        .args(&["-Qoq", path])
-        .output()
-        .unwrap();
+fn get_package_owning_path(path: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+    let output = Command::new("pacman").args(&["-Qoq", path]).output()?;
 
-    output
+    Ok(output
         .stdout
         .lines()
         .map(std::result::Result::unwrap)
-        .collect()
+        .collect())
 }
 
 fn get_broken_python_packages(
     current_python_version: &PythonPackageVersion,
-) -> VecDeque<(String, String)> {
+) -> Result<VecDeque<(String, String)>, Box<dyn error::Error>> {
     let mut packages = VecDeque::new();
 
     let current_python_dir = format!(
@@ -109,17 +126,18 @@ fn get_broken_python_packages(
         current_python_version.major, current_python_version.minor
     );
 
-    for python_dir_entry in
-        glob(&format!("/usr/lib/python{}*", current_python_version.major)).unwrap()
-    {
-        let python_dir = python_dir_entry
-            .unwrap()
+    for python_dir_entry in glob(&format!("/usr/lib/python{}*", current_python_version.major))? {
+        let python_dir = python_dir_entry?
             .into_os_string()
             .into_string()
-            .unwrap();
+            .or_else(|_| {
+                Err(SimpleError::new(
+                    "Failed to convert OS string to native string",
+                ))
+            })?;
 
         if python_dir != current_python_dir {
-            let dir_packages = get_package_owning_path(&python_dir);
+            let dir_packages = get_package_owning_path(&python_dir)?;
             for package in dir_packages {
                 let couple = (package, python_dir.clone());
                 if !packages.contains(&couple) {
@@ -129,34 +147,44 @@ fn get_broken_python_packages(
         }
     }
 
-    packages
+    Ok(packages)
 }
 
-fn get_aur_packages() -> Vec<String> {
-    let output = Command::new("pacman").args(&["-Qqm"]).output().unwrap();
+fn get_aur_packages() -> Result<Vec<String>, Box<dyn error::Error>> {
+    let output = Command::new("pacman").args(&["-Qqm"]).output()?;
 
     if !output.status.success() {
-        panic!();
+        return Err(Box::new(SimpleError::new(
+            "Failed to list packages with pacman",
+        )));
     }
 
-    Vec::from_iter(output.stdout.lines().map(std::result::Result::unwrap))
+    Ok(Vec::from_iter(
+        output.stdout.lines().map(std::result::Result::unwrap),
+    ))
 }
 
-fn get_package_executable_files(package: &str) -> VecDeque<String> {
+fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
     let mut files = VecDeque::new();
 
-    let output = Command::new("pacman")
-        .args(&["-Ql", package])
-        .output()
-        .unwrap();
+    let output = Command::new("pacman").args(&["-Ql", package]).output()?;
 
     if !output.status.success() {
-        panic!();
+        return Err(Box::new(SimpleError::new(format!(
+            "Failed to list files for package '{}' with pacman",
+            package
+        ))));
     }
 
     for line in output.stdout.lines() {
-        let line = line.unwrap();
-        let path = line.split(' ').nth(1).unwrap().to_string();
+        let line = line?;
+        let path = line
+            .split(' ')
+            .nth(1)
+            .ok_or_else(|| {
+                SimpleError::new("Unexpected pacman output: unable to parse package file list")
+            })?
+            .to_string();
         let metadata = match fs::metadata(&path) {
             Ok(m) => m,
             Err(_e) => continue,
@@ -166,13 +194,13 @@ fn get_package_executable_files(package: &str) -> VecDeque<String> {
         }
     }
 
-    files
+    Ok(Vec::from(files))
 }
 
-fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
+fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
     let mut missing_deps = VecDeque::new();
 
-    let output = Command::new("ldd").args(&[exec_file]).output().unwrap();
+    let output = Command::new("ldd").args(&[exec_file]).output()?;
 
     if output.status.success() {
         for missing_dep in output
@@ -186,7 +214,7 @@ fn get_missing_dependencies(exec_file: &str) -> VecDeque<String> {
         }
     }
 
-    missing_deps
+    Ok(Vec::from(missing_deps))
 }
 
 fn main() {
@@ -197,13 +225,25 @@ fn main() {
     let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam::unbounded();
     thread::Builder::new()
         .spawn(move || {
-            let current_python_version = get_python_version();
-            debug!("Python version: {:?}", current_python_version);
-
-            let broken_python_packages = get_broken_python_packages(&current_python_version);
-            python_broken_packages_tx
-                .send(broken_python_packages)
-                .unwrap();
+            let to_send = match get_python_version() {
+                Ok(current_python_version) => {
+                    debug!("Python version: {}", current_python_version);
+                    let broken_python_packages =
+                        get_broken_python_packages(&current_python_version);
+                    match broken_python_packages {
+                        Ok(broken_python_packages) => broken_python_packages,
+                        Err(e) => {
+                            eprintln!("Failed to list Python packages: {}", e);
+                            VecDeque::<(String, String)>::new()
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to get Python version: {}", e);
+                    VecDeque::<(String, String)>::new()
+                }
+            };
+            python_broken_packages_tx.send(to_send).unwrap();
         })
         .unwrap();
 
@@ -211,7 +251,7 @@ fn main() {
     let cpu_count = num_cpus::get();
 
     // Get package names
-    let aur_packages = get_aur_packages();
+    let aur_packages = get_aur_packages().unwrap();
 
     // Init progressbar
     let progress =
@@ -236,15 +276,25 @@ fn main() {
                 while let Ok(exec_file_work) = exec_files_rx.recv() {
                     debug!("exec_files_rx => {:?}", &exec_file_work);
                     let missing_deps = get_missing_dependencies(&exec_file_work.exec_filepath);
-                    for missing_dep in missing_deps {
-                        let to_send = (
-                            Arc::clone(&exec_file_work.package),
-                            Arc::clone(&exec_file_work.exec_filepath),
-                            missing_dep,
-                        );
-                        debug!("{:?} => missing_deps_tx", &to_send);
-                        if missing_deps_tx.send(to_send).is_err() {
-                            break;
+                    match missing_deps {
+                        Ok(missing_deps) => {
+                            for missing_dep in missing_deps {
+                                let to_send = (
+                                    Arc::clone(&exec_file_work.package),
+                                    Arc::clone(&exec_file_work.exec_filepath),
+                                    missing_dep,
+                                );
+                                debug!("{:?} => missing_deps_tx", &to_send);
+                                if missing_deps_tx.send(to_send).is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Failed to get missing dependencies for path '{}': {}",
+                                &exec_file_work.exec_filepath, e
+                            );
                         }
                     }
                     if exec_file_work.package_last {
@@ -270,7 +320,17 @@ fn main() {
                 scope.spawn(move |_| {
                     while let Ok(package) = package_rx.recv() {
                         debug!("package_rx => {:?}", package);
-                        let exec_files = get_package_executable_files(&package);
+                        let exec_files = match get_package_executable_files(&package) {
+                            Ok(exec_files) => exec_files,
+                            Err(e) => {
+                                eprintln!(
+                                    "Failed to get executable files of package '{}': {}",
+                                    &package, e
+                                );
+                                progress.inc(1);
+                                continue;
+                            }
+                        };
                         if exec_files.is_empty() {
                             progress.inc(1);
                             continue;
@@ -315,15 +375,16 @@ fn main() {
         );
     }
 
-    let broken_python_packages = python_broken_packages_rx.recv().unwrap();
-    for (broken_python_package, dir) in broken_python_packages {
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "Package '{}' has files in directory '{}' that are ignored by the current Python interpreter",
-                broken_python_package, dir
-            ))
-        );
+    if let Ok(broken_python_packages) = python_broken_packages_rx.recv() {
+        for (broken_python_package, dir) in broken_python_packages {
+            println!(
+                "{}",
+                Yellow.paint(format!(
+                    "Package '{}' has files in directory '{}' that are ignored by the current Python interpreter",
+                    broken_python_package, dir
+                ))
+            );
+        }
     }
 }
 
@@ -390,8 +451,10 @@ mod tests {
 
         let path_orig = update_path(tmp_dir.path().to_str().unwrap());
 
+        let missing_deps = get_missing_dependencies("dummy");
+        assert!(missing_deps.is_ok());
         assert_eq!(
-            get_missing_dependencies("dummy"),
+            missing_deps.unwrap(),
             [
                 "libavdevice.so.57",
                 "libavfilter.so.6",
