@@ -65,16 +65,17 @@ fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
         )));
     }
 
-    let version_str = output
+    let version_line = output
         .stdout
         .lines()
-        .map(std::result::Result::unwrap)
-        .filter(|l| l.starts_with("Version"))
-        .map(|l| l.split(':').nth(1).unwrap().trim_start().to_string())
-        .next()
-        .ok_or_else(|| {
-            SimpleError::new("Unexpected pacman output: unable to find Python version")
-        })?;
+        .filter_map(|l| l.ok())
+        .find(|l| l.starts_with("Version"))
+        .ok_or_else(|| SimpleError::new("Unexpected pacman output: unable to find version line"))?;
+    let version_str = version_line
+        .split(':')
+        .nth(1)
+        .ok_or_else(|| SimpleError::new("Unexpected pacman output: unable to parse version line"))?
+        .trim_start();
 
     let mut dot_iter = version_str.split('.');
     let major = u8::from_str(dot_iter.next().ok_or_else(|| {
@@ -197,7 +198,7 @@ fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn er
     Ok(Vec::from(files))
 }
 
-fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+fn get_missing_dependencies(exec_file: &str) -> Result<VecDeque<String>, Box<dyn error::Error>> {
     let mut missing_deps = VecDeque::new();
 
     let output = Command::new("ldd").args(&[exec_file]).output()?;
@@ -214,7 +215,7 @@ fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn erro
         }
     }
 
-    Ok(Vec::from(missing_deps))
+    Ok(missing_deps)
 }
 
 fn main() {
