@@ -68,7 +68,7 @@ fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
     let version_line = output
         .stdout
         .lines()
-        .filter_map(|l| l.ok())
+        .filter_map(Result::ok)
         .find(|l| l.starts_with("Version"))
         .ok_or_else(|| SimpleError::new("Unexpected pacman output: unable to find version line"))?;
     let version_str = version_line
