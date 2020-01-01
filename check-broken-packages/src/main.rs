@@ -233,14 +233,14 @@ fn main() {
                         get_broken_python_packages(&current_python_version);
                     match broken_python_packages {
                         Ok(broken_python_packages) => broken_python_packages,
-                        Err(e) => {
-                            eprintln!("Failed to list Python packages: {}", e);
+                        Err(err) => {
+                            eprintln!("Failed to list Python packages: {}", err);
                             VecDeque::<(String, String)>::new()
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("Failed to get Python version: {}", e);
+                Err(err) => {
+                    eprintln!("Failed to get Python version: {}", err);
                     VecDeque::<(String, String)>::new()
                 }
             };
@@ -291,10 +291,10 @@ fn main() {
                                 }
                             }
                         }
-                        Err(e) => {
+                        Err(err) => {
                             eprintln!(
                                 "Failed to get missing dependencies for path '{}': {}",
-                                &exec_file_work.exec_filepath, e
+                                &exec_file_work.exec_filepath, err
                             );
                         }
                     }
@@ -323,10 +323,10 @@ fn main() {
                         debug!("package_rx => {:?}", package);
                         let exec_files = match get_package_executable_files(&package) {
                             Ok(exec_files) => exec_files,
-                            Err(e) => {
+                            Err(err) => {
                                 eprintln!(
                                     "Failed to get executable files of package '{}': {}",
-                                    &package, e
+                                    &package, err
                                 );
                                 progress.inc(1);
                                 continue;
