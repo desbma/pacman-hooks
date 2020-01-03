@@ -1,5 +1,4 @@
 use std::cmp;
-use std::collections::VecDeque;
 use std::error;
 use std::fmt;
 use std::fs;
@@ -119,8 +118,8 @@ fn get_package_owning_path(path: &str) -> Result<Vec<String>, Box<dyn error::Err
 
 fn get_broken_python_packages(
     current_python_version: &PythonPackageVersion,
-) -> Result<VecDeque<(String, String)>, Box<dyn error::Error>> {
-    let mut packages = VecDeque::new();
+) -> Result<Vec<(String, String)>, Box<dyn error::Error>> {
+    let mut packages = Vec::new();
 
     let current_python_dir = format!(
         "/usr/lib/python{}.{}",
@@ -142,7 +141,7 @@ fn get_broken_python_packages(
             for package in dir_packages {
                 let couple = (package, python_dir.clone());
                 if !packages.contains(&couple) {
-                    packages.push_back(couple);
+                    packages.push(couple);
                 }
             }
         }
@@ -166,7 +165,7 @@ fn get_aur_packages() -> Result<Vec<String>, Box<dyn error::Error>> {
 }
 
 fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
-    let mut files = VecDeque::new();
+    let mut files = Vec::new();
 
     let output = Command::new("pacman").args(&["-Ql", package]).output()?;
 
@@ -191,15 +190,15 @@ fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn er
             Err(_e) => continue,
         };
         if metadata.file_type().is_file() && ((metadata.permissions().mode() & 0o111) != 0) {
-            files.push_back(path);
+            files.push(path);
         }
     }
 
-    Ok(Vec::from(files))
+    Ok(files)
 }
 
-fn get_missing_dependencies(exec_file: &str) -> Result<VecDeque<String>, Box<dyn error::Error>> {
-    let mut missing_deps = VecDeque::new();
+fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+    let mut missing_deps = Vec::new();
 
     let output = Command::new("ldd").args(&[exec_file]).output()?;
 
@@ -211,7 +210,7 @@ fn get_missing_dependencies(exec_file: &str) -> Result<VecDeque<String>, Box<dyn
             .filter(|l| l.ends_with("=> not found"))
             .map(|l| l.split(' ').next().unwrap().trim_start().to_string())
         {
-            missing_deps.push_back(missing_dep);
+            missing_deps.push(missing_dep);
         }
     }
 
@@ -235,13 +234,13 @@ fn main() {
                         Ok(broken_python_packages) => broken_python_packages,
                         Err(err) => {
                             eprintln!("Failed to list Python packages: {}", err);
-                            VecDeque::<(String, String)>::new()
+                            Vec::<(String, String)>::new()
                         }
                     }
                 }
                 Err(err) => {
                     eprintln!("Failed to get Python version: {}", err);
-                    VecDeque::<(String, String)>::new()
+                    Vec::<(String, String)>::new()
                 }
             };
             python_broken_packages_tx.send(to_send).unwrap();
