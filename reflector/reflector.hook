@@ -7,4 +7,4 @@ Target = pacman-mirrorlist
 Description = Updating pacman-mirrorlist with reflector
 When = PostTransaction
 Depends = reflector
-Exec = /bin/bash -c 'reflector --verbose --threads 16 -c fr -c de -c gb -a 18 --completion-percent 100 -p https --sort rate --save /etc/pacman.d/mirrorlist; test -f /etc/pacman.d/mirrorlist.pacnew && mv -v /etc/pacman.d/mirrorlist.{pacnew,orig} || true'
+Exec = /bin/bash -c 'systemctl start reflector; test -f /etc/pacman.d/mirrorlist.local && cat /etc/pacman.d/mirrorlist.local /etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist.new && mv /etc/pacman.d/mirrorlist{.new,}; test -f /etc/pacman.d/mirrorlist.pacnew && mv -v /etc/pacman.d/mirrorlist.{pacnew,orig} || true'
