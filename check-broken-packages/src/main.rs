@@ -130,11 +130,7 @@ fn get_broken_python_packages(
         let python_dir = python_dir_entry?
             .into_os_string()
             .into_string()
-            .or_else(|_| {
-                Err(SimpleError::new(
-                    "Failed to convert OS string to native string",
-                ))
-            })?;
+            .map_err(|_| SimpleError::new("Failed to convert OS string to native string"))?;
 
         if python_dir != current_python_dir {
             let dir_packages = get_package_owning_path(&python_dir)?;
