@@ -5,6 +5,8 @@ authors = ["desbma <desbma@users.noreply.github.com>"]
 edition = "2018"
 
 [profile.release]
+lto = true
+codegen-units = 1
 panic = "abort"
 
 [dependencies]
