@@ -27,10 +27,10 @@ type CrossbeamChannel<T> = (
 #[derive(Debug)]
 struct ExecFileWork {
     /// AUR package name
-    package: Arc<String>,
+    #[allow(clippy::rc_buffer)] package: Arc<String>,
 
     // Executable filepath
-    exec_filepath: Arc<String>,
+    #[allow(clippy::rc_buffer)] exec_filepath: Arc<String>,
 
     /// True if this is the last executable filepath for the package (used to report progress)
     package_last: bool,
