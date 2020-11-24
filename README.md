@@ -34,6 +34,8 @@ This is roughly equivalent to the following Bash code:
 
 However it is written in Rust and uses a thread pool for **much faster** processing (runs in ~1.3s on my machine with ~90 AUR packages, compared to ~14s for the above Bash code).
 
+The hook also detects broken Systemd links for enabled services in `/etc/systemd/{user,system}/*.target.*`.
+
 
 ### pacdiff
 

@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::VecDeque;
 use std::error;
 use std::fmt;
 use std::fs;
@@ -213,6 +214,62 @@ fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn erro
     Ok(missing_deps)
 }
 
+fn get_sd_enabled_service_links() -> Result<VecDeque<String>, Box<dyn error::Error>> {
+    let mut service_links = VecDeque::new();
+
+    let mut dirs_content = [
+        glob("/etc/systemd/system/*.target.*"),
+        glob("/etc/systemd/user/*.target.*"),
+    ];
+    for dir_content in &mut dirs_content {
+        if let Ok(dir_content) = dir_content {
+            for base_dir in dir_content {
+                if let Ok(base_dir) = base_dir {
+                    for file in std::fs::read_dir(base_dir.as_path())
+                        .unwrap()
+                        .map(Result::unwrap)
+                    {
+                        if file.file_type()?.is_symlink() {
+                            service_links
+                                .push_back(file.path().into_os_string().into_string().unwrap());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(service_links)
+}
+
+fn is_valid_link(link: &str) -> Result<bool, Box<dyn error::Error>> {
+    let mut target = link.to_string();
+    loop {
+        target = fs::read_link(target)?
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        let metadata = match fs::metadata(&target) {
+            Err(_) => {
+                return Ok(false);
+            }
+            Ok(m) => m,
+        };
+
+        let ftype = metadata.file_type();
+        if ftype.is_file() {
+            return Ok(true);
+        } else if ftype.is_symlink() {
+            continue;
+        } else {
+            return Err(Box::new(SimpleError::new(format!(
+                "Unexpected file type for '{}'",
+                target
+            ))));
+        }
+    }
+}
+
 fn main() {
     // Init logger
     simple_logger::init().unwrap();
@@ -249,12 +306,16 @@ fn main() {
     // Get package names
     let aur_packages = get_aur_packages().unwrap();
 
+    // Get systemd enabled services
+    let enabled_sd_service_links = get_sd_enabled_service_links().unwrap();
+    let mut broken_sd_service_links: VecDeque<String> = VecDeque::new();
+
     // Init progressbar
-    let progress =
-        ProgressBar::with_draw_target(aur_packages.len() as u64, ProgressDrawTarget::stderr());
-    progress.set_style(
-        ProgressStyle::default_bar().template("Analyzing packages {wide_bar} {pos}/{len}"),
+    let progress = ProgressBar::with_draw_target(
+        (aur_packages.len() + enabled_sd_service_links.len()) as u64,
+        ProgressDrawTarget::stderr(),
     );
+    progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}"));
 
     // Missing deps channel
     let (missing_deps_tx, missing_deps_rx) = crossbeam::unbounded();
@@ -356,6 +417,14 @@ fn main() {
             }
         })
         .unwrap();
+
+        // We don't bother to use a worker thread for this, the overhead is not worth it
+        for enabled_sd_service_link in enabled_sd_service_links {
+            if !is_valid_link(&enabled_sd_service_link).unwrap() {
+                broken_sd_service_links.push_back(enabled_sd_service_link);
+            }
+            progress.inc(1);
+        }
     })
     .unwrap();
 
@@ -381,6 +450,16 @@ fn main() {
                 ))
             );
         }
+    }
+
+    for broken_sd_service_link in broken_sd_service_links {
+        println!(
+            "{}",
+            Yellow.paint(format!(
+                "Systemd enabled service has broken link in '{}'",
+                &broken_sd_service_link,
+            ))
+        );
     }
 }
 
