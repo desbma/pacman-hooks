@@ -1,4 +1,7 @@
 language: rust
+cache:
+  directories:
+    - $HOME/.rustup
 matrix:
   include:
     - rust: stable
