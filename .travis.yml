@@ -18,11 +18,12 @@ matrix:
 before_script:
   - "if [ $CLIPPY -eq 1 ]; then rustup component add clippy; fi"
   - "if [ $RUSTFMT -eq 1 ]; then rustup component add rustfmt; fi"
+  - "rustup update"
 script:
   - "cd check-broken-packages"
   - "if [ $BUILD -eq 1 ]; then cargo build --verbose --all; fi"
   - "if [ $TEST -eq 1 ]; then cargo test --verbose --all; fi"
-  - "if [ $CLIPPY -eq 1 ]; then cargo clippy --all-targets --all-features -- -D warnings -A clippy::unreadable_literal; fi"
+  - "if [ $CLIPPY -eq 1 ]; then cargo clippy --all-targets --all-features -- -D warnings; fi"
   - "if [ $RUSTFMT -eq 1 ]; then cargo fmt --all -- --check; fi"
 notifications:
   email:
