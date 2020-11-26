@@ -1,7 +1,5 @@
 language: rust
-cache:
-  directories:
-    - $HOME/.rustup
+# cache dirs are set with rust language
 matrix:
   include:
     - rust: stable
@@ -19,6 +17,7 @@ matrix:
       env: BUILD=0 TEST=0 CLIPPY=1 RUSTFMT=1
     - rust: nightly
 before_script:
+  - "export PATH=$HOME/.cargo/bin:$PATH"
   - "if [ $CLIPPY -eq 1 ]; then rustup component add clippy; fi"
   - "if [ $RUSTFMT -eq 1 ]; then rustup component add rustfmt; fi"
   - "rustup update"
