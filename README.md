@@ -1,7 +1,7 @@
 Pacman hooks
 ============
 
-[![Build status](https://img.shields.io/travis/desbma/pacman-hooks/master.svg?style=flat)](https://travis-ci.org/desbma/pacman-hooks)
+[![Build status](https://img.shields.io/github/workflow/status/desbma/pacman-hooks/check-broken-packages.svg?style=flat)](https://github.com/desbma/pacman-hooks/actions/)
 [![AUR version](https://img.shields.io/aur/version/pacman-hooks-desbma-git.svg?style=flat)](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/)
 [![License](https://img.shields.io/github/license/desbma/pacman-hooks.svg?style=flat)](https://github.com/desbma/pacman-hooks/blob/master/LICENSE)
 
