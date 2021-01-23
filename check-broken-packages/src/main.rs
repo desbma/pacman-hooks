@@ -4,7 +4,6 @@ use std::error;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
-use std::iter::FromIterator;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use std::str::FromStr;
@@ -158,9 +157,11 @@ fn get_aur_packages() -> Result<Vec<String>, Box<dyn error::Error>> {
         )));
     }
 
-    Ok(Vec::from_iter(
-        output.stdout.lines().map(std::result::Result::unwrap),
-    ))
+    Ok(output
+        .stdout
+        .lines()
+        .map(std::result::Result::unwrap)
+        .collect())
 }
 
 fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
