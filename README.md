@@ -56,6 +56,11 @@ See https://wiki.archlinux.org/index.php/Reflector#Pacman_hook
 Syncs `/` and `/boot` partitions when packages are installed, upgraded or removed.
 
 
+### xmonad-recompile
+
+Automatically run `xmonad --recompile` for each user in the system after `xmonad` or any of its dependencies is updated.
+
+
 ## Installation
 
 Install the [pacman-hooks-desbma-git AUR package](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/).
