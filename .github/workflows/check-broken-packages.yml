@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Build
-        run: cargo build --verbose
+      - run: cargo build --verbose
 
   test:
     runs-on: ubuntu-latest
@@ -49,4 +48,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --manifest-path ./check-broken-packages/Cargo.toml  --all -- --check
+          args: --manifest-path ./check-broken-packages/Cargo.toml --all -- --check
