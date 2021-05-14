@@ -231,8 +231,7 @@ fn get_sd_enabled_service_links() -> Result<VecDeque<String>, Box<dyn error::Err
                 .map(Result::unwrap)
             {
                 if file.file_type()?.is_symlink() {
-                    service_links
-                        .push_back(file.path().into_os_string().into_string().unwrap());
+                    service_links.push_back(file.path().into_os_string().into_string().unwrap());
                 }
             }
         }
