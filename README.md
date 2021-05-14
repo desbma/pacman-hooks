@@ -2,10 +2,10 @@ Pacman hooks
 ============
 
 [![Build status](https://img.shields.io/github/workflow/status/desbma/pacman-hooks/check-broken-packages.svg?style=flat)](https://github.com/desbma/pacman-hooks/actions/)
-[![AUR version](https://img.shields.io/aur/version/pacman-hooks-desbma-git.svg?style=flat)](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/)
+[![AUR version](https://img.shields.io/aur/version/pacman-hooks-desbma-git.svg?style=flat)](https://aur.archlinux.org/packages/check-broken-packages-pacman-hook-git/)
 [![License](https://img.shields.io/github/license/desbma/pacman-hooks.svg?style=flat)](https://github.com/desbma/pacman-hooks/blob/master/LICENSE)
 
-Some Arch Linux Pacman hooks I wrote for y own use.
+Some useful Arch Linux Pacman hooks.
 
 
 ## Hooks
@@ -63,9 +63,15 @@ Automatically run `xmonad --recompile` for each user in the system after `xmonad
 
 ## Installation
 
-Install the [pacman-hooks-desbma-git AUR package](https://aur.archlinux.org/packages/pacman-hooks-desbma-git/).
-Note that you probably want to edit files, or create your own package rather than directly install this one because some values are hardcoded for my own specific needs.
+Install via the AUR packages:
 
+* [check-broken-packages-pacman-hook-git](https://aur.archlinux.org/packages/check-broken-packages-pacman-hook-git/)
+* [pacdiff-pacman-hook-git](https://aur.archlinux.org/packages/pacdiff-pacman-hook-git/)
+* [reflector-pacman-hook-git](https://aur.archlinux.org/packages/reflector-pacman-hook-git/)
+* [sync-pacman-hook-git](https://aur.archlinux.org/packages/sync-pacman-hook-git/)
+* [xmonad-recompile-pacman-hook-git](https://aur.archlinux.org/packages/xmonad-recompile-pacman-hook-git/)
+
+This was previously contained in a single package `pacman-hooks-desbma-git`, however this is against the AUR guidelines so each hook is now available in a separate package.
 
 ## License
 
