@@ -224,19 +224,15 @@ fn get_sd_enabled_service_links() -> Result<VecDeque<String>, Box<dyn error::Err
         glob("/etc/systemd/system/*.target.*"),
         glob("/etc/systemd/user/*.target.*"),
     ];
-    for dir_content in &mut dirs_content {
-        if let Ok(dir_content) = dir_content {
-            for base_dir in dir_content {
-                if let Ok(base_dir) = base_dir {
-                    for file in std::fs::read_dir(base_dir.as_path())
-                        .unwrap()
-                        .map(Result::unwrap)
-                    {
-                        if file.file_type()?.is_symlink() {
-                            service_links
-                                .push_back(file.path().into_os_string().into_string().unwrap());
-                        }
-                    }
+    for dir_content in dirs_content.iter_mut().flatten() {
+        for base_dir in dir_content.flatten() {
+            for file in std::fs::read_dir(base_dir.as_path())
+                .unwrap()
+                .map(Result::unwrap)
+            {
+                if file.file_type()?.is_symlink() {
+                    service_links
+                        .push_back(file.path().into_os_string().into_string().unwrap());
                 }
             }
         }
