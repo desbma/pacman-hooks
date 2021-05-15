@@ -111,11 +111,7 @@ fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
         .env("LANG", "C")
         .output()?;
 
-    Ok(output
-        .stdout
-        .lines()
-        .flatten()
-        .collect())
+    Ok(output.stdout.lines().flatten().collect())
 }
 
 fn get_broken_python_packages(
@@ -158,16 +154,10 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
         anyhow::bail!("Failed to list packages with pacman",);
     }
 
-    Ok(output
-        .stdout
-        .lines()
-        .flatten()
-        .collect())
+    Ok(output.stdout.lines().flatten().collect())
 }
 
 fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
-    let mut files = Vec::new();
-
     let output = Command::new("pacman")
         .args(&["-Ql", package])
         .env("LANG", "C")
@@ -177,23 +167,17 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
         anyhow::bail!("Failed to list files for package {:?} with pacman", package);
     }
 
-    for line in output.stdout.lines() {
-        let line = line?;
-        let path = line
-            .split(' ')
-            .nth(1)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Unexpected pacman output: unable to parse package file list")
-            })?
-            .to_string();
-        let metadata = match fs::metadata(&path) {
-            Ok(m) => m,
-            Err(_e) => continue,
-        };
-        if metadata.file_type().is_file() && ((metadata.permissions().mode() & 0o111) != 0) {
-            files.push(path);
-        }
-    }
+    let files = output
+        .stdout
+        .lines()
+        .flatten()
+        .filter_map(|l| l.split(' ').nth(1).map(|p| p.to_string()))
+        .filter(|p| {
+            fs::metadata(&p)
+                .map(|m| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
+                .unwrap_or(false)
+        })
+        .collect();
 
     Ok(files)
 }
@@ -210,7 +194,8 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
             .lines()
             .flatten()
             .filter(|l| l.ends_with("=> not found"))
-            .map(|l| l.split(' ').next().unwrap().trim_start().to_string())
+            .filter_map(|l| l.split(' ').next().map(|s| s.to_owned()))
+            .map(|l| l.trim_start().to_string())
             .collect()
     } else {
         Vec::new()
@@ -296,10 +281,11 @@ fn main() {
     let cpu_count = num_cpus::get();
 
     // Get package names
-    let aur_packages = get_aur_packages().unwrap();
+    let aur_packages = get_aur_packages().expect("Unable to get list of AUR packages");
 
     // Get systemd enabled services
-    let enabled_sd_service_links = get_sd_enabled_service_links().unwrap();
+    let enabled_sd_service_links =
+        get_sd_enabled_service_links().expect("Unable to Systemd enabled services");
     let mut broken_sd_service_links: Vec<String> = Vec::new();
 
     // Init progressbar
