@@ -2,7 +2,7 @@ Pacman hooks
 ============
 
 [![Build status](https://img.shields.io/github/workflow/status/desbma/pacman-hooks/check-broken-packages.svg?style=flat)](https://github.com/desbma/pacman-hooks/actions/)
-[![AUR version](https://img.shields.io/aur/version/pacman-hooks-desbma-git.svg?style=flat)](https://aur.archlinux.org/packages/check-broken-packages-pacman-hook-git/)
+[![AUR version](https://img.shields.io/aur/version/check-broken-packages-git.svg?style=flat)](https://aur.archlinux.org/packages/check-broken-packages-pacman-hook-git/)
 [![License](https://img.shields.io/github/license/desbma/pacman-hooks.svg?style=flat)](https://github.com/desbma/pacman-hooks/blob/master/LICENSE)
 
 Some useful Arch Linux Pacman hooks.
