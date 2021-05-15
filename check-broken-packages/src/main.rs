@@ -106,7 +106,7 @@ fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
 }
 
 fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
-    let output = Command::new("pacman").args(&["-Qoq", path]).output()?;
+    let output = Command::new("pacman").args(&["-Qoq", path]).env("LANG", "C").output()?;
 
     Ok(output
         .stdout
@@ -146,7 +146,7 @@ fn get_broken_python_packages(
 }
 
 fn get_aur_packages() -> anyhow::Result<Vec<String>> {
-    let output = Command::new("pacman").args(&["-Qqm"]).output()?;
+    let output = Command::new("pacman").args(&["-Qqm"]).env("LANG", "C").output()?;
 
     if !output.status.success() {
         anyhow::bail!("Failed to list packages with pacman",);
@@ -162,7 +162,7 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
 fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
     let mut files = Vec::new();
 
-    let output = Command::new("pacman").args(&["-Ql", package]).output()?;
+    let output = Command::new("pacman").args(&["-Ql", package]).env("LANG", "C").output()?;
 
     if !output.status.success() {
         anyhow::bail!("Failed to list files for package '{}' with pacman", package);
@@ -193,8 +193,8 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
     let mut missing_deps = Vec::new();
 
     let output = Command::new("ldd")
-        .env("LANG", "C")
         .args(&[exec_file])
+        .env("LANG", "C")
         .output()?;
 
     if output.status.success() {
