@@ -1,9 +1,9 @@
 use std::cmp;
-use std::collections::VecDeque;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -199,58 +199,51 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
 }
 
 fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
-    let mut missing_deps = Vec::new();
-
     let output = Command::new("ldd")
         .args(&[exec_file])
         .env("LANG", "C")
         .output()?;
 
-    if output.status.success() {
-        for missing_dep in output
+    let missing_deps = if output.status.success() {
+        output
             .stdout
             .lines()
-            .map(std::result::Result::unwrap)
+            .flatten()
             .filter(|l| l.ends_with("=> not found"))
             .map(|l| l.split(' ').next().unwrap().trim_start().to_string())
-        {
-            missing_deps.push(missing_dep);
-        }
-    }
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     Ok(missing_deps)
 }
 
-fn get_sd_enabled_service_links() -> anyhow::Result<VecDeque<String>> {
-    let mut service_links = VecDeque::new();
-
+fn get_sd_enabled_service_links() -> anyhow::Result<Vec<String>> {
     let mut dirs_content = [
         glob("/etc/systemd/system/*.target.*"),
         glob("/etc/systemd/user/*.target.*"),
     ];
-    for dir_content in dirs_content.iter_mut().flatten() {
-        for base_dir in dir_content.flatten() {
-            for file in std::fs::read_dir(base_dir.as_path())
-                .unwrap()
-                .map(Result::unwrap)
-            {
-                if file.file_type()?.is_symlink() {
-                    service_links.push_back(file.path().into_os_string().into_string().unwrap());
-                }
-            }
-        }
-    }
+
+    let service_links: Vec<String> = dirs_content
+        .iter_mut()
+        .flatten()
+        .flatten()
+        .flatten()
+        .filter_map(|p| std::fs::read_dir(p.as_path()).ok())
+        .flatten()
+        .flatten()
+        .filter(|f| f.file_type().map_or(false, |f| f.is_symlink()))
+        .filter_map(|f| f.path().into_os_string().into_string().ok())
+        .collect();
 
     Ok(service_links)
 }
 
 fn is_valid_link(link: &str) -> anyhow::Result<bool> {
-    let mut target = link.to_string();
+    let mut target: PathBuf = link.into();
     loop {
-        target = fs::read_link(target)?
-            .into_os_string()
-            .into_string()
-            .unwrap();
+        target = fs::read_link(target)?;
         let metadata = match fs::metadata(&target) {
             Err(_) => {
                 return Ok(false);
@@ -264,7 +257,7 @@ fn is_valid_link(link: &str) -> anyhow::Result<bool> {
         } else if ftype.is_symlink() {
             continue;
         } else {
-            anyhow::bail!("Unexpected file type for '{}'", target);
+            anyhow::bail!("Unexpected file type for {:?}", target);
         }
     }
 }
@@ -307,7 +300,7 @@ fn main() {
 
     // Get systemd enabled services
     let enabled_sd_service_links = get_sd_enabled_service_links().unwrap();
-    let mut broken_sd_service_links: VecDeque<String> = VecDeque::new();
+    let mut broken_sd_service_links: Vec<String> = Vec::new();
 
     // Init progressbar
     let progress = ProgressBar::with_draw_target(
@@ -380,7 +373,7 @@ fn main() {
                             Ok(exec_files) => exec_files,
                             Err(err) => {
                                 eprintln!(
-                                    "Failed to get executable files of package '{}': {}",
+                                    "Failed to get executable files of package {:?}: {}",
                                     &package, err
                                 );
                                 progress.inc(1);
@@ -418,12 +411,12 @@ fn main() {
         .unwrap();
 
         // We don't bother to use a worker thread for this, the overhead is not worth it
-        for enabled_sd_service_link in enabled_sd_service_links {
-            if !is_valid_link(&enabled_sd_service_link).unwrap() {
-                broken_sd_service_links.push_back(enabled_sd_service_link);
-            }
-            progress.inc(1);
-        }
+        broken_sd_service_links = enabled_sd_service_links
+            .iter()
+            .filter(|s| !is_valid_link(s).unwrap_or(true))
+            .map(|l| l.to_owned())
+            .collect();
+        progress.inc(enabled_sd_service_links.len() as u64);
     })
     .unwrap();
 
