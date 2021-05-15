@@ -174,7 +174,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to list files for package '{}' with pacman", package);
+        anyhow::bail!("Failed to list files for package {:?} with pacman", package);
     }
 
     for line in output.stdout.lines() {
@@ -341,7 +341,7 @@ fn main() {
                         }
                         Err(err) => {
                             eprintln!(
-                                "Failed to get missing dependencies for path '{}': {}",
+                                "Failed to get missing dependencies for path {:?}: {}",
                                 &exec_file_work.exec_filepath, err
                             );
                         }
@@ -426,7 +426,7 @@ fn main() {
         println!(
             "{}",
             Yellow.paint(format!(
-                "File '{}' from package '{}' is missing dependency '{}'",
+                "File {:?} from package {:?} is missing dependency {:?}",
                 file, package, missing_dep
             ))
         );
@@ -437,7 +437,7 @@ fn main() {
             println!(
                 "{}",
                 Yellow.paint(format!(
-                    "Package '{}' has files in directory '{}' that are ignored by the current Python interpreter",
+                    "Package {:?} has files in directory {:?} that are ignored by the current Python interpreter",
                     broken_python_package, dir
                 ))
             );
@@ -448,7 +448,7 @@ fn main() {
         println!(
             "{}",
             Yellow.paint(format!(
-                "Systemd enabled service has broken link in '{}'",
+                "Systemd enabled service has broken link in {:?}",
                 &broken_sd_service_link,
             ))
         );
