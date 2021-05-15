@@ -1,6 +1,5 @@
 use std::cmp;
 use std::collections::VecDeque;
-use std::error;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
@@ -15,7 +14,7 @@ use crossbeam::thread as cb_thread;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
-use simple_error::SimpleError;
+use simple_logger::SimpleLogger;
 
 type CrossbeamChannel<T> = (
     crossbeam::channel::Sender<T>,
@@ -54,16 +53,14 @@ impl fmt::Display for PythonPackageVersion {
     }
 }
 
-fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
+fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
     let output = Command::new("pacman")
         .args(&["-Qi", "python"])
         .env("LANG", "C")
         .output()?;
 
     if !output.status.success() {
-        return Err(Box::new(SimpleError::new(
-            "Failed to query Python version with pacman",
-        )));
+        anyhow::bail!("Failed to query Python version with pacman",);
     }
 
     let version_line = output
@@ -71,33 +68,33 @@ fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
         .lines()
         .filter_map(Result::ok)
         .find(|l| l.starts_with("Version"))
-        .ok_or_else(|| SimpleError::new("Unexpected pacman output: unable to find version line"))?;
+        .ok_or_else(|| anyhow::anyhow!("Unexpected pacman output: unable to find version line"))?;
     let version_str = version_line
         .split(':')
         .nth(1)
-        .ok_or_else(|| SimpleError::new("Unexpected pacman output: unable to parse version line"))?
+        .ok_or_else(|| anyhow::anyhow!("Unexpected pacman output: unable to parse version line"))?
         .trim_start();
 
     let mut dot_iter = version_str.split('.');
     let major = u8::from_str(dot_iter.next().ok_or_else(|| {
-        SimpleError::new("Unexpected pacman output: unable to parse Python version major part")
+        anyhow::anyhow!("Unexpected pacman output: unable to parse Python version major part")
     })?)?;
     let minor = u8::from_str(dot_iter.next().ok_or_else(|| {
-        SimpleError::new("Unexpected pacman output: unable to parse Python version minor part")
+        anyhow::anyhow!("Unexpected pacman output: unable to parse Python version minor part")
     })?)?;
     let mut dash_iter = dot_iter
         .next()
         .ok_or_else(|| {
-            SimpleError::new(
+            anyhow::anyhow!(
                 "Unexpected pacman output: unable to parse Python version release/package part",
             )
         })?
         .split('-');
     let release = u8::from_str(dash_iter.next().ok_or_else(|| {
-        SimpleError::new("Unexpected pacman output: unable to parse Python version release part")
+        anyhow::anyhow!("Unexpected pacman output: unable to parse Python version release part")
     })?)?;
     let package = u8::from_str(dash_iter.next().ok_or_else(|| {
-        SimpleError::new("Unexpected pacman output: unable to parse Python version package part")
+        anyhow::anyhow!("Unexpected pacman output: unable to parse Python version package part")
     })?)?;
 
     Ok(PythonPackageVersion {
@@ -108,7 +105,7 @@ fn get_python_version() -> Result<PythonPackageVersion, Box<dyn error::Error>> {
     })
 }
 
-fn get_package_owning_path(path: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman").args(&["-Qoq", path]).output()?;
 
     Ok(output
@@ -120,7 +117,7 @@ fn get_package_owning_path(path: &str) -> Result<Vec<String>, Box<dyn error::Err
 
 fn get_broken_python_packages(
     current_python_version: &PythonPackageVersion,
-) -> Result<Vec<(String, String)>, Box<dyn error::Error>> {
+) -> anyhow::Result<Vec<(String, String)>> {
     let mut packages = Vec::new();
 
     let current_python_dir = format!(
@@ -132,7 +129,7 @@ fn get_broken_python_packages(
         let python_dir = python_dir_entry?
             .into_os_string()
             .into_string()
-            .map_err(|_| SimpleError::new("Failed to convert OS string to native string"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to convert OS string to native string"))?;
 
         if python_dir != current_python_dir {
             let dir_packages = get_package_owning_path(&python_dir)?;
@@ -148,13 +145,11 @@ fn get_broken_python_packages(
     Ok(packages)
 }
 
-fn get_aur_packages() -> Result<Vec<String>, Box<dyn error::Error>> {
+fn get_aur_packages() -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman").args(&["-Qqm"]).output()?;
 
     if !output.status.success() {
-        return Err(Box::new(SimpleError::new(
-            "Failed to list packages with pacman",
-        )));
+        anyhow::bail!("Failed to list packages with pacman",);
     }
 
     Ok(output
@@ -164,16 +159,13 @@ fn get_aur_packages() -> Result<Vec<String>, Box<dyn error::Error>> {
         .collect())
 }
 
-fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
     let mut files = Vec::new();
 
     let output = Command::new("pacman").args(&["-Ql", package]).output()?;
 
     if !output.status.success() {
-        return Err(Box::new(SimpleError::new(format!(
-            "Failed to list files for package '{}' with pacman",
-            package
-        ))));
+        anyhow::bail!("Failed to list files for package '{}' with pacman", package);
     }
 
     for line in output.stdout.lines() {
@@ -182,7 +174,7 @@ fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn er
             .split(' ')
             .nth(1)
             .ok_or_else(|| {
-                SimpleError::new("Unexpected pacman output: unable to parse package file list")
+                anyhow::anyhow!("Unexpected pacman output: unable to parse package file list")
             })?
             .to_string();
         let metadata = match fs::metadata(&path) {
@@ -197,10 +189,13 @@ fn get_package_executable_files(package: &str) -> Result<Vec<String>, Box<dyn er
     Ok(files)
 }
 
-fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
+fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
     let mut missing_deps = Vec::new();
 
-    let output = Command::new("ldd").args(&[exec_file]).output()?;
+    let output = Command::new("ldd")
+        .env("LANG", "C")
+        .args(&[exec_file])
+        .output()?;
 
     if output.status.success() {
         for missing_dep in output
@@ -217,7 +212,7 @@ fn get_missing_dependencies(exec_file: &str) -> Result<Vec<String>, Box<dyn erro
     Ok(missing_deps)
 }
 
-fn get_sd_enabled_service_links() -> Result<VecDeque<String>, Box<dyn error::Error>> {
+fn get_sd_enabled_service_links() -> anyhow::Result<VecDeque<String>> {
     let mut service_links = VecDeque::new();
 
     let mut dirs_content = [
@@ -240,7 +235,7 @@ fn get_sd_enabled_service_links() -> Result<VecDeque<String>, Box<dyn error::Err
     Ok(service_links)
 }
 
-fn is_valid_link(link: &str) -> Result<bool, Box<dyn error::Error>> {
+fn is_valid_link(link: &str) -> anyhow::Result<bool> {
     let mut target = link.to_string();
     loop {
         target = fs::read_link(target)?
@@ -260,17 +255,14 @@ fn is_valid_link(link: &str) -> Result<bool, Box<dyn error::Error>> {
         } else if ftype.is_symlink() {
             continue;
         } else {
-            return Err(Box::new(SimpleError::new(format!(
-                "Unexpected file type for '{}'",
-                target
-            ))));
+            anyhow::bail!("Unexpected file type for '{}'", target);
         }
     }
 }
 
 fn main() {
     // Init logger
-    simple_logger::init().unwrap();
+    SimpleLogger::new().init().unwrap();
 
     // Python broken packages channel
     let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam::unbounded();
