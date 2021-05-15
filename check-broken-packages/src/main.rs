@@ -3,7 +3,7 @@ use std::fmt;
 use std::fs;
 use std::io::BufRead;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -204,28 +204,28 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
     Ok(missing_deps)
 }
 
-fn get_sd_enabled_service_links() -> anyhow::Result<Vec<String>> {
+fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
     let mut dirs_content = [
         glob("/etc/systemd/system/*.target.*"),
         glob("/etc/systemd/user/*.target.*"),
     ];
 
-    let service_links: Vec<String> = dirs_content
+    let service_links: Vec<PathBuf> = dirs_content
         .iter_mut()
         .flatten()
         .flatten()
         .flatten()
-        .filter_map(|p| std::fs::read_dir(p.as_path()).ok())
+        .filter_map(|p| fs::read_dir(p.as_path()).ok())
         .flatten()
         .flatten()
         .filter(|f| f.file_type().map_or(false, |f| f.is_symlink()))
-        .filter_map(|f| f.path().into_os_string().into_string().ok())
+        .map(|f| f.path())
         .collect();
 
     Ok(service_links)
 }
 
-fn is_valid_link(link: &str) -> anyhow::Result<bool> {
+fn is_valid_link(link: &Path) -> anyhow::Result<bool> {
     let mut target: PathBuf = link.into();
     loop {
         target = fs::read_link(target)?;
@@ -286,7 +286,7 @@ fn main() {
     // Get systemd enabled services
     let enabled_sd_service_links =
         get_sd_enabled_service_links().expect("Unable to Systemd enabled services");
-    let mut broken_sd_service_links: Vec<String> = Vec::new();
+    let mut broken_sd_service_links: Vec<PathBuf> = Vec::new();
 
     // Init progressbar
     let progress = ProgressBar::with_draw_target(
