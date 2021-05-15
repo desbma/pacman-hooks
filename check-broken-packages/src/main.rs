@@ -114,7 +114,7 @@ fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
     Ok(output
         .stdout
         .lines()
-        .map(std::result::Result::unwrap)
+        .flatten()
         .collect())
 }
 
@@ -161,7 +161,7 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
     Ok(output
         .stdout
         .lines()
-        .map(std::result::Result::unwrap)
+        .flatten()
         .collect())
 }
 
