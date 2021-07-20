@@ -370,7 +370,11 @@ fn main() {
                             progress.inc(1);
                             continue;
                         }
-                        for (i, exec_file) in exec_files.iter().enumerate() {
+                        for (i, exec_file) in exec_files
+                            .iter()
+                            .filter(|p| !p.starts_with("/opt/")) // Exclude files in /opt likely to use non standard library location
+                            .enumerate()
+                        {
                             let to_send = ExecFileWork {
                                 package: Arc::clone(&package),
                                 exec_filepath: Arc::new(exec_file.to_string()),
