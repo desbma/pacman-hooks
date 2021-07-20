@@ -370,9 +370,13 @@ fn main() {
                             progress.inc(1);
                             continue;
                         }
+
+                        // Exclude executables in commonly used non standard directories,
+                        // likely to also use non standard library locations
+                        const BLACKLISTED_EXE_DIRS: [&str; 2] = ["/opt/", "/usr/share/"];
                         for (i, exec_file) in exec_files
                             .iter()
-                            .filter(|p| !p.starts_with("/opt/")) // Exclude files in /opt likely to use non standard library location
+                            .filter(|p| !BLACKLISTED_EXE_DIRS.iter().any(|d| p.starts_with(d)))
                             .enumerate()
                         {
                             let to_send = ExecFileWork {
