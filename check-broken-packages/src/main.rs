@@ -172,6 +172,11 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
         .lines()
         .flatten()
         .filter_map(|l| l.split(' ').nth(1).map(|p| p.to_string()))
+        .map(|s| {
+            fs::read_link(&s)
+                .map(|p| p.to_str().unwrap().to_string())
+                .unwrap_or(s)
+        })
         .filter(|p| {
             fs::metadata(&p)
                 .map(|m| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
