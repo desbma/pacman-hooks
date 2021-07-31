@@ -511,7 +511,7 @@ mod tests {
         )
         .unwrap();
         fake_ldd_file
-            .set_permissions(Permissions::from_mode(0o777))
+            .set_permissions(Permissions::from_mode(0o700))
             .unwrap();
         drop(fake_ldd_file);
 
