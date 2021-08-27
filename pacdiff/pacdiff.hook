@@ -5,7 +5,8 @@ Target = *
 
 [Action]
 Description = Reviewing .pacnew and .pacsave files
-Exec = /bin/bash -c 'yes "v s" | tr " " "\n" | DIFFPROG=/usr/share/libalpm/scripts/pacdiff_diffprog pacdiff'
+Exec = /bin/bash -c 'yes "v s" | tr " " "\n" | DIFFPROG=delta pacdiff'
 When = PostTransaction
+Depends = delta
 Depends = git
 Depends = pacman-contrib
