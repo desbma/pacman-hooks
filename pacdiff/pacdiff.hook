@@ -7,5 +7,5 @@ Target = *
 Description = Reviewing .pacnew and .pacsave files
 Exec = /bin/bash -c 'yes "v s" | tr " " "\n" | DIFFPROG=delta pacdiff'
 When = PostTransaction
-Depends = git-delta
+Depends = delta
 Depends = pacman-contrib
