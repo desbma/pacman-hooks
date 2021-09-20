@@ -7,5 +7,6 @@ Target = *
 Description = Reviewing .pacnew files
 Exec = /usr/share/libalpm/scripts/pacdiff_delta
 When = PostTransaction
+Depends = diffutils
 Depends = git-delta
 Depends = pacman-contrib
