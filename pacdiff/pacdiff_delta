@@ -1,0 +1,18 @@
+#!/bin/bash -eu
+
+#
+# Small script to view .pacnew diff through delta filter (from the git-delta package)
+# Unfortunately 'DIFFPROG=delta pacdiff' does not work as intended in non interactive context
+#
+
+set -o pipefail
+
+for pacnew_path in $(pacdiff -o)
+do
+    modified_path="${pacnew_path%.pacnew}"
+    if [ ! -r "${modified_path}" ] || [ "${pacnew_path}" = "${modified_path}" ]
+    then
+        continue
+    fi
+    delta --paging=never "${pacnew_path}" "${modified_path}"
+done
