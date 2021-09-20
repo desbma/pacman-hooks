@@ -5,8 +5,6 @@
 # Unfortunately 'DIFFPROG=delta pacdiff' does not work as intended in non interactive context
 #
 
-set -o pipefail
-
 for pacnew_path in $(pacdiff -o)
 do
     modified_path="${pacnew_path%.pacnew}"
@@ -14,5 +12,5 @@ do
     then
         continue
     fi
-    delta --paging=never "${pacnew_path}" "${modified_path}"
+    diff -u "${pacnew_path}" "${modified_path}" | delta --paging=never --no-gitconfig -n
 done
