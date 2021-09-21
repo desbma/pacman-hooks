@@ -5,6 +5,11 @@
 # Unfortunately 'DIFFPROG=delta pacdiff' does not work as intended in non interactive context
 #
 
+#
+# To configure delta output, edit /root/.config/git/config
+# See https://github.com/dandavison/delta#usage
+#
+
 for pacnew_path in $(pacdiff -o)
 do
     modified_path="${pacnew_path%.pacnew}"
@@ -12,5 +17,5 @@ do
     then
         continue
     fi
-    diff -u "${pacnew_path}" "${modified_path}" | delta --paging=never --no-gitconfig -n
+    diff -u "${pacnew_path}" "${modified_path}" | delta
 done
