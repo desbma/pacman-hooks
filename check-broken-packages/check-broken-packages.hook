@@ -4,6 +4,6 @@ Type = Package
 Target = *
 
 [Action]
-Description = Checking for package with missing dependencies
+Description = Checking for package with missing dependencies...
 Exec = /usr/bin/check-broken-packages
 When = PostTransaction

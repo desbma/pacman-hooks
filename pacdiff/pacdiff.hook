@@ -4,7 +4,7 @@ Type = Package
 Target = *
 
 [Action]
-Description = Reviewing .pacnew files
+Description = Reviewing .pacnew files...
 Exec = /usr/share/libalpm/scripts/pacdiff_delta
 When = PostTransaction
 Depends = diffutils

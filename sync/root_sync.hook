@@ -6,7 +6,7 @@ Type = Package
 Target = *
 
 [Action]
-Description = Sync file system on /
+Description = Syncing file system on /...
 Exec = /usr/bin/sync -f /
 When = PostTransaction
 Depends = coreutils
