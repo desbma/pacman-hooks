@@ -4,7 +4,7 @@ Type = Package
 Target = pacman-mirrorlist
 
 [Action]
-Description = Updating pacman-mirrorlist with reflector
+Description = Updating pacman-mirrorlist with reflector...
 When = PostTransaction
 Depends = reflector
 Exec = /bin/bash -c 'systemctl start reflector; test -f /etc/pacman.d/mirrorlist.local && cat /etc/pacman.d/mirrorlist.local /etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist.new && mv /etc/pacman.d/mirrorlist{.new,}; test -f /etc/pacman.d/mirrorlist.pacnew && mv -v /etc/pacman.d/mirrorlist.{pacnew,orig} || true'

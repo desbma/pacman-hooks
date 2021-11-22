@@ -6,7 +6,7 @@ Type = Path
 Target = boot/*
 
 [Action]
-Description = Sync file system on /boot
+Description = Syncing file system on /boot...
 Exec = /usr/bin/sync -f /boot
 When = PostTransaction
 Depends = coreutils
