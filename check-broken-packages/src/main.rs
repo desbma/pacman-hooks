@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::thread;
 
 use ansi_term::Colour::*;
+use anyhow::Context;
 use crossbeam::thread as cb_thread;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -111,7 +112,10 @@ fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
         .env("LANG", "C")
         .output()?;
 
-    Ok(output.stdout.lines().flatten().collect())
+    Ok(output
+        .stdout
+        .lines()
+        .collect::<Result<Vec<String>, std::io::Error>>()?)
 }
 
 fn get_broken_python_packages(
@@ -154,7 +158,10 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
         anyhow::bail!("Failed to list packages with pacman",);
     }
 
-    Ok(output.stdout.lines().flatten().collect())
+    Ok(output
+        .stdout
+        .lines()
+        .collect::<Result<Vec<String>, std::io::Error>>()?)
 }
 
 fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
@@ -170,7 +177,8 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
     let files = output
         .stdout
         .lines()
-        .flatten()
+        .collect::<Result<Vec<String>, _>>()?
+        .into_iter()
         .filter_map(|l| l.split(' ').nth(1).map(|p| p.to_string()))
         .map(|s| {
             fs::read_link(&s)
@@ -197,7 +205,8 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
         output
             .stdout
             .lines()
-            .flatten()
+            .collect::<Result<Vec<String>, _>>()?
+            .into_iter()
             .filter(|l| l.ends_with("=> not found"))
             .filter_map(|l| l.split(' ').next().map(|s| s.to_owned()))
             .map(|l| l.trim_start().to_string())
@@ -219,7 +228,8 @@ fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
         .iter_mut()
         .flatten()
         .flatten()
-        .flatten()
+        .collect::<Result<Vec<PathBuf>, _>>()?
+        .into_iter()
         .filter_map(|p| fs::read_dir(p.as_path()).ok())
         .flatten()
         .flatten()
@@ -252,9 +262,11 @@ fn is_valid_link(link: &Path) -> anyhow::Result<bool> {
     }
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Init logger
-    SimpleLogger::new().init().unwrap();
+    SimpleLogger::new()
+        .init()
+        .context("Failed to init logger")?;
 
     // Python broken packages channel
     let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam::unbounded();
@@ -280,17 +292,17 @@ fn main() {
             };
             python_broken_packages_tx.send(to_send).unwrap();
         })
-        .unwrap();
+        .context("Failed to start thread")?;
 
     // Get usable core count
     let cpu_count = num_cpus::get();
 
     // Get package names
-    let aur_packages = get_aur_packages().expect("Unable to get list of AUR packages");
+    let aur_packages = get_aur_packages().context("Unable to get list of AUR packages")?;
 
     // Get systemd enabled services
     let enabled_sd_service_links =
-        get_sd_enabled_service_links().expect("Unable to Systemd enabled services");
+        get_sd_enabled_service_links().context("Unable to Systemd enabled services")?;
     let mut broken_sd_service_links: Vec<PathBuf> = Vec::new();
 
     // Init progressbar
@@ -452,6 +464,8 @@ fn main() {
             ))
         );
     }
+
+    Ok(())
 }
 
 #[cfg(test)]

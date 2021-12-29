@@ -10,7 +10,7 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
 ansi_term = "0.12"
 crossbeam = "0.7"
 glob = "0.3"
