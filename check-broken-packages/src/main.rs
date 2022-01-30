@@ -1,4 +1,7 @@
 use std::cmp;
+use std::env;
+use std::collections::BinaryHeap;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
@@ -433,14 +436,23 @@ fn main() -> anyhow::Result<()> {
 
     progress.finish_and_clear();
 
+    let mut libmap = HashMap::<String, HashMap<Arc<String>, BinaryHeap<Arc<String>>>>::new();
     for (package, file, missing_dep) in missing_deps_rx.iter() {
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "File {:?} from package {:?} is missing dependency {:?}",
-                file, package, missing_dep
-            ))
-        );
+        libmap.entry(missing_dep).or_default().entry(package).or_default().push(file);
+    }
+    for missing_dep in libmap.keys() {
+        print!("packages ");
+        for (i, package) in libmap[missing_dep].keys().enumerate() {
+            print!("{}", Yellow.paint(package.to_string()));
+            if i+1 < libmap[missing_dep].keys().len() {
+                print!(";");
+            }
+        }
+        print!(" are missing {}", Red.paint(missing_dep));
+        println!();
+    }
+    if env::args().any(|x| x.starts_with("-v") || x.starts_with("--v")) {
+        println!("{:#?}", libmap);
     }
 
     if let Ok(broken_python_packages) = python_broken_packages_rx.recv() {
