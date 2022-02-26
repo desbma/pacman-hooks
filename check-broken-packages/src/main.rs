@@ -154,10 +154,6 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
         .env("LANG", "C")
         .output()?;
 
-    if !output.status.success() {
-        anyhow::bail!("Failed to list packages with pacman",);
-    }
-
     Ok(output
         .stdout
         .lines()
