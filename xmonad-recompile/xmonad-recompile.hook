@@ -7,4 +7,4 @@ Target=haskell*
 [Action]
 Description=Recompiling Xmonad config...
 When=PostTransaction
-Exec=/usr/bin/bash -euc "command -v xmonad > /dev/null || exit 0; find /home -mindepth 1 -maxdepth 1 -type d -printf '%P\0' | xargs -0I'{}' su '{}' -c 'xmonad --recompile || true'"
+Exec=/usr/bin/bash -euc "command -v xmonad > /dev/null || exit 0; find /home -mindepth 1 -maxdepth 1 -type d -printf '%P\0' | xargs -0I'{}' su '{}' -s /usr/bin/bash -c 'xmonad --recompile || true'"
