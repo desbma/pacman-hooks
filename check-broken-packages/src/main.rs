@@ -263,7 +263,7 @@ fn main() -> anyhow::Result<()> {
     // Python broken packages channel
     let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam_channel::unbounded();
     thread::Builder::new()
-        .spawn(move || {
+        .spawn(move || -> anyhow::Result<()> {
             let to_send = match get_python_version() {
                 Ok(current_python_version) => {
                     debug!("Python version: {}", current_python_version);
@@ -282,7 +282,8 @@ fn main() -> anyhow::Result<()> {
                     Vec::<(String, String)>::new()
                 }
             };
-            python_broken_packages_tx.send(to_send).unwrap();
+            python_broken_packages_tx.send(to_send)?;
+            Ok(())
         })
         .context("Failed to start thread")?;
 
@@ -305,18 +306,19 @@ fn main() -> anyhow::Result<()> {
     progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}"));
 
     // Missing deps channel
-    let (missing_deps_tx, missing_deps_rx) = crossbeam::unbounded();
+    let (missing_deps_tx, missing_deps_rx) = crossbeam_channel::unbounded();
 
-    cb_thread::scope(|scope| {
+    crossbeam_utils::thread::scope(|scope| -> anyhow::Result<()> {
         // Executable file channel
-        let (exec_files_tx, exec_files_rx): CrossbeamChannel<ExecFileWork> = crossbeam::unbounded();
+        let (exec_files_tx, exec_files_rx): CrossbeamChannel<ExecFileWork> =
+            crossbeam_channel::unbounded();
 
         // Executable files to missing deps workers
         for _ in 0..cpu_count {
             let exec_files_rx = exec_files_rx.clone();
             let missing_deps_tx = missing_deps_tx.clone();
             let progress = progress.clone();
-            scope.spawn(move |_| {
+            scope.spawn(move |_| -> anyhow::Result<()> {
                 while let Ok(exec_file_work) = exec_files_rx.recv() {
                     debug!("exec_files_rx => {:?}", &exec_file_work);
                     let missing_deps = get_missing_dependencies(&exec_file_work.exec_filepath);
@@ -410,10 +412,12 @@ fn main() -> anyhow::Result<()> {
             // Send package names
             for aur_package in aur_packages {
                 debug!("{:?} => package_tx", aur_package);
-                package_tx.send(Arc::new(aur_package)).unwrap();
+                package_tx.send(Arc::new(aur_package))?;
             }
+
+            Ok(())
         })
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("Worker thread error: {:?}", e))??;
 
         // We don't bother to use a worker thread for this, the overhead is not worth it
         broken_sd_service_links = enabled_sd_service_links
@@ -422,8 +426,10 @@ fn main() -> anyhow::Result<()> {
             .map(|l| l.to_owned())
             .collect();
         progress.inc(enabled_sd_service_links.len() as u64);
+
+        Ok(())
     })
-    .unwrap();
+    .map_err(|e| anyhow::anyhow!("Worker thread error: {:?}", e))??;
 
     progress.finish_and_clear();
 
