@@ -11,16 +11,12 @@ use std::thread;
 
 use ansi_term::Colour::*;
 use anyhow::Context;
-use crossbeam::thread as cb_thread;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::debug;
 use simple_logger::SimpleLogger;
 
-type CrossbeamChannel<T> = (
-    crossbeam::channel::Sender<T>,
-    crossbeam::channel::Receiver<T>,
-);
+type CrossbeamChannel<T> = (crossbeam_channel::Sender<T>, crossbeam_channel::Receiver<T>);
 
 /// Executable file work unit for a worker thread to process
 #[derive(Debug)]
@@ -265,7 +261,7 @@ fn main() -> anyhow::Result<()> {
         .context("Failed to init logger")?;
 
     // Python broken packages channel
-    let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam::unbounded();
+    let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam_channel::unbounded();
     thread::Builder::new()
         .spawn(move || {
             let to_send = match get_python_version() {
@@ -349,15 +345,17 @@ fn main() -> anyhow::Result<()> {
                         progress.inc(1);
                     }
                 }
+                Ok(())
             });
         }
 
         // Drop this end of the channel, workers have their own clone
         drop(missing_deps_tx);
 
-        cb_thread::scope(|scope| {
+        crossbeam_utils::thread::scope(|scope| -> anyhow::Result<()> {
             // Package name channel
-            let (package_tx, package_rx): CrossbeamChannel<Arc<String>> = crossbeam::unbounded();
+            let (package_tx, package_rx): CrossbeamChannel<Arc<String>> =
+                crossbeam_channel::unbounded();
 
             // Package name to executable files workers
             let worker_count = cmp::min(cpu_count, aur_packages.len());

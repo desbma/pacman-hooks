@@ -12,7 +12,8 @@ panic = "abort"
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 ansi_term = "0.12"
-crossbeam = "0.7"
+crossbeam-channel = "0.5"
+crossbeam-utils = "0.8"
 glob = "0.3"
 indicatif = "0.13"
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
