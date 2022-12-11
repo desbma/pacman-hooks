@@ -52,7 +52,7 @@ impl fmt::Display for PythonPackageVersion {
 
 fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
     let output = Command::new("pacman")
-        .args(&["-Qi", "python"])
+        .args(["-Qi", "python"])
         .env("LANG", "C")
         .output()?;
 
@@ -104,7 +104,7 @@ fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
 
 fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman")
-        .args(&["-Qoq", path])
+        .args(["-Qoq", path])
         .env("LANG", "C")
         .output()?;
 
@@ -146,7 +146,7 @@ fn get_broken_python_packages(
 
 fn get_aur_packages() -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman")
-        .args(&["-Qqm"])
+        .args(["-Qqm"])
         .env("LANG", "C")
         .output()?;
 
@@ -158,7 +158,7 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
 
 fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman")
-        .args(&["-Ql", package])
+        .args(["-Ql", package])
         .env("LANG", "C")
         .output()?;
 
@@ -178,7 +178,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
                 .unwrap_or(s)
         })
         .filter(|p| {
-            fs::metadata(&p)
+            fs::metadata(p)
                 .map(|m| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
                 .unwrap_or(false)
         })
@@ -189,7 +189,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
 
 fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
     let output = Command::new("ldd")
-        .args(&[exec_file])
+        .args([exec_file])
         .env("LANG", "C")
         .output()?;
 
