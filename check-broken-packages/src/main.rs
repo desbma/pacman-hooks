@@ -272,13 +272,13 @@ fn main() -> anyhow::Result<()> {
                     match broken_python_packages {
                         Ok(broken_python_packages) => broken_python_packages,
                         Err(err) => {
-                            eprintln!("Failed to list Python packages: {}", err);
+                            eprintln!("Failed to list Python packages: {err}");
                             Vec::<(String, String)>::new()
                         }
                     }
                 }
                 Err(err) => {
-                    eprintln!("Failed to get Python version: {}", err);
+                    eprintln!("Failed to get Python version: {err}");
                     Vec::<(String, String)>::new()
                 }
             };
@@ -437,8 +437,7 @@ fn main() -> anyhow::Result<()> {
         println!(
             "{}",
             Yellow.paint(format!(
-                "File {:?} from package {:?} is missing dependency {:?}",
-                file, package, missing_dep
+                "File {file:?} from package {package:?} is missing dependency {missing_dep:?}"
             ))
         );
     }
@@ -448,8 +447,7 @@ fn main() -> anyhow::Result<()> {
             println!(
                 "{}",
                 Yellow.paint(format!(
-                    "Package {:?} has files in directory {:?} that are ignored by the current Python interpreter",
-                    broken_python_package, dir
+                    "Package {broken_python_package:?} has files in directory {dir:?} that are ignored by the current Python interpreter"
                 ))
             );
         }
@@ -486,7 +484,7 @@ mod tests {
         paths_vec.insert(0, PathBuf::from(dir));
 
         let paths = env::join_paths(paths_vec).unwrap();
-        env::set_var("PATH", &paths);
+        env::set_var("PATH", paths);
 
         path_orig
     }
@@ -548,6 +546,6 @@ mod tests {
             ]
         );
 
-        env::set_var("PATH", &path_orig);
+        env::set_var("PATH", path_orig);
     }
 }
