@@ -2,7 +2,7 @@
 name = "check-broken-packages"
 version = "1.0.0"
 authors = ["desbma <desbma@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 
 [profile.release]
 lto = true
@@ -12,12 +12,10 @@ panic = "abort"
 [dependencies]
 anyhow = { version = "1.0.66", default-features = false, features = ["backtrace", "std"] }
 ansi_term = { version = "0.12.1", default-features = false }
-crossbeam-channel = { version = "0.5.6", default-features = false, features = ["std"] }
-crossbeam-utils = { version = "0.8.12", default-features = false, features = ["std"] }
 glob = { version = "0.3.0", default-features = false }
-indicatif = { version = "0.13.0", default-features = false }
+indicatif = { version = "0.17.3", default-features = false, features = ["rayon"] }
 log = { version = "0.4.17", default-features = false, features = ["max_level_off", "release_max_level_off"] }
-num_cpus = { version = "1.13.1", default-features = false }
+rayon = { version = "1.7.0", default-features = false }
 simple_logger = { version = "3.0.0", default-features = false }
 
 [dev-dependencies]

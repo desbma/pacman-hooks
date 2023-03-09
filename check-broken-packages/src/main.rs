@@ -1,4 +1,3 @@
-use std::cmp;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
@@ -7,31 +6,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::thread;
 
 use ansi_term::Colour::*;
 use anyhow::Context;
 use glob::glob;
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use log::debug;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use rayon::prelude::*;
 use simple_logger::SimpleLogger;
-
-type CrossbeamChannel<T> = (crossbeam_channel::Sender<T>, crossbeam_channel::Receiver<T>);
-
-/// Executable file work unit for a worker thread to process
-#[derive(Debug)]
-struct ExecFileWork {
-    /// AUR package name
-    #[allow(clippy::rc_buffer)]
-    package: Arc<String>,
-
-    // Executable filepath
-    #[allow(clippy::rc_buffer)]
-    exec_filepath: Arc<String>,
-
-    /// True if this is the last executable filepath for the package (used to report progress)
-    package_last: bool,
-}
 
 struct PythonPackageVersion {
     major: u8,
@@ -108,10 +89,7 @@ fn get_package_owning_path(path: &str) -> anyhow::Result<Vec<String>> {
         .env("LANG", "C")
         .output()?;
 
-    Ok(output
-        .stdout
-        .lines()
-        .collect::<Result<Vec<String>, std::io::Error>>()?)
+    Ok(output.stdout.lines().collect::<Result<Vec<String>, _>>()?)
 }
 
 fn get_broken_python_packages(
@@ -150,10 +128,7 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
         .env("LANG", "C")
         .output()?;
 
-    Ok(output
-        .stdout
-        .lines()
-        .collect::<Result<Vec<String>, std::io::Error>>()?)
+    Ok(output.stdout.lines().collect::<Result<Vec<String>, _>>()?)
 }
 
 fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
@@ -254,41 +229,34 @@ fn is_valid_link(link: &Path) -> anyhow::Result<bool> {
     }
 }
 
+// Exclude executables in commonly used non standard directories,
+// likely to also use non standard library locations
+const BLACKLISTED_EXE_DIRS: [&str; 2] = ["/opt/", "/usr/share/"];
+
 fn main() -> anyhow::Result<()> {
     // Init logger
     SimpleLogger::new()
         .init()
         .context("Failed to init logger")?;
 
-    // Python broken packages channel
-    let (python_broken_packages_tx, python_broken_packages_rx) = crossbeam_channel::unbounded();
-    thread::Builder::new()
-        .spawn(move || -> anyhow::Result<()> {
-            let to_send = match get_python_version() {
-                Ok(current_python_version) => {
-                    debug!("Python version: {}", current_python_version);
-                    let broken_python_packages =
-                        get_broken_python_packages(&current_python_version);
-                    match broken_python_packages {
-                        Ok(broken_python_packages) => broken_python_packages,
-                        Err(err) => {
-                            eprintln!("Failed to list Python packages: {err}");
-                            Vec::<(String, String)>::new()
-                        }
-                    }
-                }
+    // Python broken packages
+    let broken_python_packages = match get_python_version() {
+        Ok(current_python_version) => {
+            log::debug!("Python version: {}", current_python_version);
+            let broken_python_packages = get_broken_python_packages(&current_python_version);
+            match broken_python_packages {
+                Ok(broken_python_packages) => broken_python_packages,
                 Err(err) => {
-                    eprintln!("Failed to get Python version: {err}");
+                    log::error!("Failed to list Python packages: {err}");
                     Vec::<(String, String)>::new()
                 }
-            };
-            python_broken_packages_tx.send(to_send)?;
-            Ok(())
-        })
-        .context("Failed to start thread")?;
-
-    // Get usable core count
-    let cpu_count = num_cpus::get();
+            }
+        }
+        Err(err) => {
+            log::error!("Failed to get Python version: {err}");
+            Vec::<(String, String)>::new()
+        }
+    };
 
     // Get package names
     let aur_packages = get_aur_packages().context("Unable to get list of AUR packages")?;
@@ -296,144 +264,59 @@ fn main() -> anyhow::Result<()> {
     // Get systemd enabled services
     let enabled_sd_service_links =
         get_sd_enabled_service_links().context("Unable to Systemd enabled services")?;
-    let mut broken_sd_service_links: Vec<PathBuf> = Vec::new();
 
     // Init progressbar
     let progress = ProgressBar::with_draw_target(
-        (aur_packages.len() + enabled_sd_service_links.len()) as u64,
+        Some((aur_packages.len() + enabled_sd_service_links.len()) as u64),
         ProgressDrawTarget::stderr(),
     );
-    progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}"));
+    progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}")?);
 
-    // Missing deps channel
-    let (missing_deps_tx, missing_deps_rx) = crossbeam_channel::unbounded();
+    // Check systemd links
+    let broken_sd_service_links: Vec<PathBuf> = enabled_sd_service_links
+        .into_par_iter()
+        .progress_with(progress.clone())
+        .filter(|s| !is_valid_link(s).unwrap_or(true))
+        .collect();
 
-    crossbeam_utils::thread::scope(|scope| -> anyhow::Result<()> {
-        // Executable file channel
-        let (exec_files_tx, exec_files_rx): CrossbeamChannel<ExecFileWork> =
-            crossbeam_channel::unbounded();
-
-        // Executable files to missing deps workers
-        for _ in 0..cpu_count {
-            let exec_files_rx = exec_files_rx.clone();
-            let missing_deps_tx = missing_deps_tx.clone();
-            let progress = progress.clone();
-            scope.spawn(move |_| -> anyhow::Result<()> {
-                while let Ok(exec_file_work) = exec_files_rx.recv() {
-                    debug!("exec_files_rx => {:?}", &exec_file_work);
-                    let missing_deps = get_missing_dependencies(&exec_file_work.exec_filepath);
-                    match missing_deps {
-                        Ok(missing_deps) => {
-                            for missing_dep in missing_deps {
-                                let to_send = (
-                                    Arc::clone(&exec_file_work.package),
-                                    Arc::clone(&exec_file_work.exec_filepath),
-                                    missing_dep,
-                                );
-                                debug!("{:?} => missing_deps_tx", &to_send);
-                                if missing_deps_tx.send(to_send).is_err() {
-                                    break;
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!(
-                                "Failed to get missing dependencies for path {:?}: {}",
-                                &exec_file_work.exec_filepath, err
-                            );
-                        }
-                    }
-                    if exec_file_work.package_last {
-                        progress.inc(1);
-                    }
-                }
-                Ok(())
-            });
-        }
-
-        // Drop this end of the channel, workers have their own clone
-        drop(missing_deps_tx);
-
-        crossbeam_utils::thread::scope(|scope| -> anyhow::Result<()> {
-            // Package name channel
-            let (package_tx, package_rx): CrossbeamChannel<Arc<String>> =
-                crossbeam_channel::unbounded();
-
-            // Package name to executable files workers
-            let worker_count = cmp::min(cpu_count, aur_packages.len());
-            for _ in 0..worker_count {
-                let package_rx = package_rx.clone();
-                let exec_files_tx = exec_files_tx.clone();
-                let progress = progress.clone();
-                scope.spawn(move |_| {
-                    while let Ok(package) = package_rx.recv() {
-                        debug!("package_rx => {:?}", package);
-                        let exec_files = match get_package_executable_files(&package) {
-                            Ok(exec_files) => exec_files,
-                            Err(err) => {
-                                eprintln!(
-                                    "Failed to get executable files of package {:?}: {}",
-                                    &package, err
-                                );
-                                progress.inc(1);
-                                continue;
-                            }
-                        };
-                        if exec_files.is_empty() {
-                            progress.inc(1);
-                            continue;
-                        }
-
-                        // Exclude executables in commonly used non standard directories,
-                        // likely to also use non standard library locations
-                        const BLACKLISTED_EXE_DIRS: [&str; 2] = ["/opt/", "/usr/share/"];
-                        for (i, exec_file) in exec_files
-                            .iter()
-                            .filter(|p| !BLACKLISTED_EXE_DIRS.iter().any(|d| p.starts_with(d)))
-                            .enumerate()
-                        {
-                            let to_send = ExecFileWork {
-                                package: Arc::clone(&package),
-                                exec_filepath: Arc::new(exec_file.to_string()),
-                                package_last: i == exec_files.len() - 1,
-                            };
-                            debug!("{:?} => exec_files_tx", &to_send);
-                            if exec_files_tx.send(to_send).is_err() {
-                                break;
-                            }
-                        }
-                    }
-                });
+    // Check packages
+    let missing_deps: Vec<(Arc<String>, Arc<String>, String)> = aur_packages
+        .into_par_iter()
+        .progress_with(progress.clone())
+        .map(|p| match get_package_executable_files(&p) {
+            Ok(f) => {
+                let pa = Arc::new(p);
+                f.into_iter()
+                    .filter(|f| !BLACKLISTED_EXE_DIRS.iter().any(|d| f.starts_with(d)))
+                    .map(|f| (Arc::clone(&pa), f))
+                    .collect()
             }
-
-            // Drop this end of the channel, workers have their own clone
-            drop(exec_files_tx);
-
-            // Send package names
-            for aur_package in aur_packages {
-                debug!("{:?} => package_tx", aur_package);
-                package_tx.send(Arc::new(aur_package))?;
+            Err(e) => {
+                log::error!("Failed to get package executable files for {p:?}: {e}");
+                Vec::new()
             }
-
-            Ok(())
         })
-        .map_err(|e| anyhow::anyhow!("Worker thread error: {:?}", e))??;
-
-        // We don't bother to use a worker thread for this, the overhead is not worth it
-        broken_sd_service_links = enabled_sd_service_links
-            .iter()
-            .filter(|s| !is_valid_link(s).unwrap_or(true))
-            .map(|l| l.to_owned())
-            .collect();
-        progress.inc(enabled_sd_service_links.len() as u64);
-
-        Ok(())
-    })
-    .map_err(|e| anyhow::anyhow!("Worker thread error: {:?}", e))??;
+        .flatten()
+        .map(|(pa, f)| match get_missing_dependencies(&f) {
+            Ok(m) => {
+                let fa = Arc::new(f);
+                m.into_iter()
+                    .map(|m| (Arc::clone(&pa), Arc::clone(&fa), m))
+                    .collect()
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to get missing dependencies for file {f:?} of package {pa:?}: {e}"
+                );
+                Vec::new()
+            }
+        })
+        .flatten()
+        .collect();
 
     progress.finish_and_clear();
 
-    for (package, file, missing_dep) in missing_deps_rx.iter() {
+    for (package, file, missing_dep) in missing_deps.iter() {
         println!(
             "{}",
             Yellow.paint(format!(
@@ -442,15 +325,13 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    if let Ok(broken_python_packages) = python_broken_packages_rx.recv() {
-        for (broken_python_package, dir) in broken_python_packages {
-            println!(
-                "{}",
-                Yellow.paint(format!(
-                    "Package {broken_python_package:?} has files in directory {dir:?} that are ignored by the current Python interpreter"
-                ))
-            );
-        }
+    for (broken_python_package, dir) in broken_python_packages {
+        println!(
+            "{}",
+            Yellow.paint(format!(
+                "Package {broken_python_package:?} has files in directory {dir:?} that are ignored by the current Python interpreter"
+            ))
+        );
     }
 
     for broken_sd_service_link in broken_sd_service_links {
