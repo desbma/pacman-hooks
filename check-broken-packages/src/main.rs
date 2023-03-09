@@ -186,13 +186,13 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
 }
 
 fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
-    let mut dirs_content = [
+    let dirs_content = [
         glob("/etc/systemd/system/*.target.*"),
         glob("/etc/systemd/user/*.target.*"),
     ];
 
     let service_links: Vec<PathBuf> = dirs_content
-        .iter_mut()
+        .into_iter()
         .flatten()
         .flatten()
         .collect::<Result<Vec<PathBuf>, _>>()?
@@ -239,31 +239,52 @@ fn main() -> anyhow::Result<()> {
         .init()
         .context("Failed to init logger")?;
 
-    // Python broken packages
-    let broken_python_packages = match get_python_version() {
-        Ok(current_python_version) => {
-            log::debug!("Python version: {}", current_python_version);
-            let broken_python_packages = get_broken_python_packages(&current_python_version);
-            match broken_python_packages {
-                Ok(broken_python_packages) => broken_python_packages,
-                Err(err) => {
-                    log::error!("Failed to list Python packages: {err}");
-                    Vec::<(String, String)>::new()
+    let mut aur_packages = None;
+    let mut enabled_sd_service_links = None;
+    let mut broken_python_packages = None;
+    rayon::scope(|scope| {
+        scope.spawn(
+            // Get package names
+            |_| {
+                aur_packages =
+                    Some(get_aur_packages().context("Unable to get list of AUR packages"))
+            },
+        );
+        scope.spawn(
+            // Get systemd enabled services
+            |_| {
+                enabled_sd_service_links = Some(
+                    get_sd_enabled_service_links().context("Unable to Systemd enabled services"),
+                )
+            },
+        );
+        scope.spawn(
+            // Python broken packages
+            |_| {
+                broken_python_packages = match get_python_version() {
+                    Ok(current_python_version) => {
+                        log::debug!("Python version: {}", current_python_version);
+                        let broken_python_packages =
+                            get_broken_python_packages(&current_python_version);
+                        match broken_python_packages {
+                            Ok(broken_python_packages) => Some(broken_python_packages),
+                            Err(err) => {
+                                log::error!("Failed to list Python packages: {err}");
+                                Some(Vec::<(String, String)>::new())
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to get Python version: {err}");
+                        Some(Vec::<(String, String)>::new())
+                    }
                 }
-            }
-        }
-        Err(err) => {
-            log::error!("Failed to get Python version: {err}");
-            Vec::<(String, String)>::new()
-        }
-    };
-
-    // Get package names
-    let aur_packages = get_aur_packages().context("Unable to get list of AUR packages")?;
-
-    // Get systemd enabled services
-    let enabled_sd_service_links =
-        get_sd_enabled_service_links().context("Unable to Systemd enabled services")?;
+            },
+        )
+    });
+    let aur_packages = aur_packages.unwrap()?;
+    let enabled_sd_service_links = enabled_sd_service_links.unwrap()?;
+    let broken_python_packages = broken_python_packages.unwrap();
 
     // Init progressbar
     let progress = ProgressBar::with_draw_target(
@@ -273,9 +294,8 @@ fn main() -> anyhow::Result<()> {
     progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}")?);
 
     // Check systemd links
-    let broken_sd_service_links: Vec<PathBuf> = enabled_sd_service_links
-        .into_par_iter()
-        .progress_with(progress.clone())
+    let broken_sd_service_links: Vec<PathBuf> = progress
+        .wrap_iter(enabled_sd_service_links.into_iter())
         .filter(|s| !is_valid_link(s).unwrap_or(true))
         .collect();
 
