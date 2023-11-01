@@ -5,9 +5,9 @@ authors = ["desbma <desbma@users.noreply.github.com>"]
 edition = "2021"
 
 [profile.release]
+strip = true
 lto = true
 codegen-units = 1
-panic = "abort"
 
 [dependencies]
 anyhow = { version = "1.0.66", default-features = false, features = ["backtrace", "std"] }
@@ -16,7 +16,7 @@ glob = { version = "0.3.0", default-features = false }
 indicatif = { version = "0.17.3", default-features = false, features = ["rayon"] }
 log = { version = "0.4.17", default-features = false, features = ["max_level_off", "release_max_level_off"] }
 rayon = { version = "1.7.0", default-features = false }
-simple_logger = { version = "3.0.0", default-features = false }
+simple_logger = { version = "4.2.0", default-features = false }
 
 [dev-dependencies]
-tempdir = { version = "0.3.7", default-features = false }
+tempfile = { version = "3.8.1", default-features = false }

@@ -374,8 +374,6 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
-    use tempdir::TempDir;
-
     use super::*;
 
     fn update_path(dir: &str) -> std::ffi::OsString {
@@ -408,7 +406,7 @@ mod tests {
 	/lib64/ld-linux-x86-64.so.2 => /usr/lib64/ld-linux-x86-64.so.2 (0x00007f4bda08d000)
 ";
 
-        let tmp_dir = TempDir::new("").unwrap();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
 
         let output_filepath = tmp_dir.path().join("output.txt");
         let mut output_file = File::create(&output_filepath).unwrap();
