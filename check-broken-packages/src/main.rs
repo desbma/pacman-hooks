@@ -44,7 +44,7 @@ fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
     let version_line = output
         .stdout
         .lines()
-        .filter_map(Result::ok)
+        .map_while(Result::ok)
         .find(|l| l.starts_with("Version"))
         .ok_or_else(|| anyhow::anyhow!("Unexpected pacman output: unable to find version line"))?;
     let version_str = version_line
