@@ -164,9 +164,13 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
 }
 
 fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
+    let exec_dir = Path::new(exec_file)
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Unable to get parent dir for path {exec_file}"))?;
     let output = Command::new("ldd")
         .arg(exec_file)
         .env("LANG", "C")
+        .env("LD_LIBRARY_PATH", exec_dir)
         .output()?;
 
     let missing_deps = if output.status.success() {
