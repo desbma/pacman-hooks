@@ -125,7 +125,7 @@ fn get_broken_python_packages(
 
 fn get_aur_packages() -> anyhow::Result<Vec<String>> {
     let output = Command::new("pacman")
-        .args(["-Qqm"])
+        .arg("-Qqm")
         .env("LANG", "C")
         .output()?;
 
@@ -165,7 +165,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
 
 fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
     let output = Command::new("ldd")
-        .args([exec_file])
+        .arg(exec_file)
         .env("LANG", "C")
         .output()?;
 
