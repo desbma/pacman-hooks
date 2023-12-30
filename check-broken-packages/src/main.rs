@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt;
 use std::fs;
 use std::io::BufRead;
@@ -239,15 +240,20 @@ fn main() -> anyhow::Result<()> {
         .init()
         .context("Failed to init logger")?;
 
-    let mut aur_packages = None;
+    let mut packages = None;
     let mut enabled_sd_service_links = None;
     let mut broken_python_packages = None;
     rayon::scope(|scope| {
         scope.spawn(
             // Get package names
             |_| {
-                aur_packages =
+                packages = if env::args().len() > 1 {
+                    // Take package names fromù command line
+                    Some(Ok(env::args().skip(1).collect()))
+                } else {
+                    // Default to "foreign" (AUR) packages
                     Some(get_aur_packages().context("Unable to get list of AUR packages"))
+                }
             },
         );
         scope.spawn(
@@ -282,13 +288,13 @@ fn main() -> anyhow::Result<()> {
             },
         )
     });
-    let aur_packages = aur_packages.unwrap()?;
+    let packages = packages.unwrap()?;
     let enabled_sd_service_links = enabled_sd_service_links.unwrap()?;
     let broken_python_packages = broken_python_packages.unwrap();
 
     // Init progressbar
     let progress = ProgressBar::with_draw_target(
-        Some((aur_packages.len() + enabled_sd_service_links.len()) as u64),
+        Some((packages.len() + enabled_sd_service_links.len()) as u64),
         ProgressDrawTarget::stderr(),
     );
     progress.set_style(ProgressStyle::default_bar().template("Analyzing {wide_bar} {pos}/{len}")?);
@@ -300,7 +306,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // Check packages
-    let missing_deps: Vec<(Arc<String>, Arc<String>, String)> = aur_packages
+    let missing_deps: Vec<(Arc<String>, Arc<String>, String)> = packages
         .into_par_iter()
         .progress_with(progress.clone())
         .map(|p| match get_package_executable_files(&p) {
