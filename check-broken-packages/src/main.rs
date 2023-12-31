@@ -149,13 +149,14 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<PathBuf>> {
         .into_iter()
         .filter_map(|l| l.split(' ').nth(1).map(PathBuf::from))
         .filter_map(|p| fs::metadata(&p).map(|m| (p, m)).ok())
-        .map(|(p, m)| {
-            let p = if m.is_symlink() {
-                fs::read_link(&p).unwrap_or(p)
+        .filter_map(|(p, m)| {
+            if m.is_symlink() {
+                fs::read_link(&p)
+                    .ok()
+                    .and_then(|p| fs::metadata(&p).map(|m| (p, m)).ok())
             } else {
-                p
-            };
-            (p, m)
+                Some((p, m))
+            }
         })
         .filter(|(_p, m)| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
         .map(|(p, _m)| p)
