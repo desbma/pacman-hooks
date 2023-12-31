@@ -9,6 +9,11 @@ strip = true
 lto = true
 codegen-units = 1
 
+[profile.profile]
+inherits = "release"
+strip = false
+debug = true
+
 [dependencies]
 anyhow = { version = "1.0.66", default-features = false, features = ["backtrace", "std"] }
 ansi_term = { version = "0.12.1", default-features = false }
