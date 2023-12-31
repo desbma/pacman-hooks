@@ -132,7 +132,7 @@ fn get_aur_packages() -> anyhow::Result<Vec<String>> {
     Ok(output.stdout.lines().collect::<Result<Vec<String>, _>>()?)
 }
 
-fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
+fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<PathBuf>> {
     let output = Command::new("pacman")
         .args(["-Ql", package])
         .env("LANG", "C")
@@ -147,31 +147,29 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<String>> {
         .lines()
         .collect::<Result<Vec<String>, _>>()?
         .into_iter()
-        .filter_map(|l| l.split(' ').nth(1).map(|p| p.to_string()))
-        .filter_map(|s| fs::metadata(&s).map(|m| (s, m)).ok())
-        .map(|(s, m)| {
-            let s = if m.is_symlink() {
-                fs::read_link(&s)
-                    .map(|p| p.to_str().unwrap().to_string())
-                    .unwrap_or(s)
+        .filter_map(|l| l.split(' ').nth(1).map(PathBuf::from))
+        .filter_map(|p| fs::metadata(&p).map(|m| (p, m)).ok())
+        .map(|(p, m)| {
+            let p = if m.is_symlink() {
+                fs::read_link(&p).unwrap_or(p)
             } else {
-                s
+                p
             };
-            (s, m)
+            (p, m)
         })
         .filter(|(_p, m)| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
-        .map(|(s, _m)| s)
+        .map(|(p, _m)| p)
         .collect();
 
     Ok(files)
 }
 
-fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
-    let exec_dir = Path::new(exec_file)
+fn get_missing_dependencies(exec_path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let exec_dir = exec_path
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("Unable to get parent dir for path {exec_file}"))?;
+        .ok_or_else(|| anyhow::anyhow!("Unable to get parent dir for path {exec_path:?}"))?;
     let output = Command::new("ldd")
-        .arg(exec_file)
+        .arg(exec_path)
         .env("LANG", "C")
         .env("LD_LIBRARY_PATH", exec_dir)
         .output()?;
@@ -183,8 +181,7 @@ fn get_missing_dependencies(exec_file: &str) -> anyhow::Result<Vec<String>> {
             .collect::<Result<Vec<String>, _>>()?
             .into_iter()
             .filter(|l| l.ends_with("=> not found"))
-            .filter_map(|l| l.split(' ').next().map(|s| s.to_owned()))
-            .map(|l| l.trim_start().to_string())
+            .filter_map(|l| l.split(' ').next().map(|s| PathBuf::from(s.trim_start())))
             .collect()
     } else {
         Vec::new()
@@ -313,7 +310,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // Check packages
-    let missing_deps: Vec<(Arc<String>, Arc<String>, String)> = packages
+    let missing_deps: Vec<(Arc<String>, Arc<PathBuf>, PathBuf)> = packages
         .into_par_iter()
         .progress_with(progress.clone())
         .map(|p| match get_package_executable_files(&p) {
@@ -441,20 +438,20 @@ mod tests {
 
         let path_orig = update_path(tmp_dir.path().to_str().unwrap());
 
-        let missing_deps = get_missing_dependencies("dummy");
+        let missing_deps = get_missing_dependencies(Path::new("dummy"));
         assert!(missing_deps.is_ok());
         assert_eq!(
             missing_deps.unwrap(),
             [
-                "libavdevice.so.57",
-                "libavfilter.so.6",
-                "libavformat.so.57",
-                "libavcodec.so.57",
-                "libavresample.so.3",
-                "libpostproc.so.54",
-                "libswresample.so.2",
-                "libswscale.so.4",
-                "libavutil.so.55"
+                Path::new("libavdevice.so.57"),
+                Path::new("libavfilter.so.6"),
+                Path::new("libavformat.so.57"),
+                Path::new("libavcodec.so.57"),
+                Path::new("libavresample.so.3"),
+                Path::new("libpostproc.so.54"),
+                Path::new("libswresample.so.2"),
+                Path::new("libswscale.so.4"),
+                Path::new("libavutil.so.55"),
             ]
         );
 
