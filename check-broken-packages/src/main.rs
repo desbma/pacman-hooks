@@ -148,16 +148,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<PathBuf>> {
         .collect::<Result<Vec<String>, _>>()?
         .into_iter()
         .filter_map(|l| l.split(' ').nth(1).map(PathBuf::from))
-        .filter_map(|p| fs::metadata(&p).map(|m| (p, m)).ok())
-        .filter_map(|(p, m)| {
-            if m.is_symlink() {
-                fs::read_link(&p)
-                    .ok()
-                    .and_then(|p| fs::metadata(&p).map(|m| (p, m)).ok())
-            } else {
-                Some((p, m))
-            }
-        })
+        .filter_map(|p| fs::symlink_metadata(&p).map(|m| (p, m)).ok())
         .filter(|(_p, m)| m.file_type().is_file() && ((m.permissions().mode() & 0o111) != 0))
         .map(|(p, _m)| p)
         .collect();
@@ -213,26 +204,8 @@ fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
     Ok(service_links)
 }
 
-fn is_valid_link(link: &Path) -> anyhow::Result<bool> {
-    let mut target: PathBuf = link.into();
-    loop {
-        target = fs::read_link(target)?;
-        let metadata = match fs::metadata(&target) {
-            Err(_) => {
-                return Ok(false);
-            }
-            Ok(m) => m,
-        };
-
-        let ftype = metadata.file_type();
-        if ftype.is_file() {
-            return Ok(true);
-        } else if ftype.is_symlink() {
-            continue;
-        } else {
-            anyhow::bail!("Unexpected file type for {:?}", target);
-        }
-    }
+fn is_valid_link(link: &Path) -> bool {
+    fs::metadata(link).is_ok_and(|m| m.is_file())
 }
 
 // Exclude executables in commonly used non standard directories,
@@ -307,7 +280,7 @@ fn main() -> anyhow::Result<()> {
     // Check systemd links
     let broken_sd_service_links: Vec<PathBuf> = progress
         .wrap_iter(enabled_sd_service_links.into_iter())
-        .filter(|s| !is_valid_link(s).unwrap_or(true))
+        .filter(|s| !is_valid_link(s))
         .collect();
 
     // Check packages
