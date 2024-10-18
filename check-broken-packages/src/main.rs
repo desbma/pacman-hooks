@@ -1,14 +1,16 @@
-use std::env;
-use std::fmt;
-use std::fs;
-use std::io::BufRead;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::str::FromStr;
-use std::sync::Arc;
+//! Check for broken arch packages
 
-use ansi_term::Colour::*;
+use std::{
+    env, fmt, fs,
+    io::BufRead,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    process::Command,
+    str::FromStr,
+    sync::Arc,
+};
+
+use ansi_term::Colour::Yellow;
 use anyhow::Context;
 use glob::glob;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -197,7 +199,7 @@ fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
         .filter_map(|p| fs::read_dir(p.as_path()).ok())
         .flatten()
         .flatten()
-        .filter(|f| f.file_type().map_or(false, |f| f.is_symlink()))
+        .filter(|e| e.file_type().map_or(false, |f| f.is_symlink()))
         .map(|f| f.path())
         .collect();
 
@@ -212,6 +214,7 @@ fn is_valid_link(link: &Path) -> bool {
 // likely to also use non standard library locations
 const BLACKLISTED_EXE_DIRS: [&str; 2] = ["/opt/", "/usr/share/"];
 
+#[expect(clippy::too_many_lines)]
 fn main() -> anyhow::Result<()> {
     // Init logger
     SimpleLogger::new()
@@ -239,7 +242,7 @@ fn main() -> anyhow::Result<()> {
             |_| {
                 enabled_sd_service_links = Some(
                     get_sd_enabled_service_links().context("Unable to Systemd enabled services"),
-                )
+                );
             },
         );
         scope.spawn(
@@ -248,10 +251,8 @@ fn main() -> anyhow::Result<()> {
                 broken_python_packages = match get_python_version() {
                     Ok(current_python_version) => {
                         log::debug!("Python version: {}", current_python_version);
-                        let broken_python_packages =
-                            get_broken_python_packages(&current_python_version);
-                        match broken_python_packages {
-                            Ok(broken_python_packages) => Some(broken_python_packages),
+                        match get_broken_python_packages(&current_python_version) {
+                            Ok(ps) => Some(ps),
                             Err(err) => {
                                 log::error!("Failed to list Python packages: {err}");
                                 Some(Vec::<(String, String)>::new())
@@ -264,10 +265,13 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             },
-        )
+        );
     });
+    #[expect(clippy::unwrap_used)]
     let packages = packages.unwrap()?;
+    #[expect(clippy::unwrap_used)]
     let enabled_sd_service_links = enabled_sd_service_links.unwrap()?;
+    #[expect(clippy::unwrap_used)]
     let broken_python_packages = broken_python_packages.unwrap();
 
     // Init progressbar
@@ -288,9 +292,9 @@ fn main() -> anyhow::Result<()> {
         .into_par_iter()
         .progress_with(progress.clone())
         .map(|p| match get_package_executable_files(&p) {
-            Ok(f) => {
+            Ok(fs) => {
                 let pa = Arc::new(p);
-                f.into_iter()
+                fs.into_iter()
                     .filter(|f| !BLACKLISTED_EXE_DIRS.iter().any(|d| f.starts_with(d)))
                     .map(|f| (Arc::clone(&pa), f))
                     .collect()
@@ -302,9 +306,9 @@ fn main() -> anyhow::Result<()> {
         })
         .flatten()
         .map(|(pa, f)| match get_missing_dependencies(&f) {
-            Ok(m) => {
+            Ok(ms) => {
                 let fa = Arc::new(f);
-                m.into_iter()
+                ms.into_iter()
                     .map(|m| (Arc::clone(&pa), Arc::clone(&fa), m))
                     .collect()
             }
@@ -320,7 +324,7 @@ fn main() -> anyhow::Result<()> {
 
     progress.finish_and_clear();
 
-    for (package, file, missing_dep) in missing_deps.iter() {
+    for (package, file, missing_dep) in &missing_deps {
         println!(
             "{}",
             Yellow.paint(format!(
@@ -353,14 +357,17 @@ fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::fs::{File, Permissions};
-    use std::io::Write;
-    use std::path::PathBuf;
+    use std::{
+        env,
+        ffi::OsString,
+        fs::{File, Permissions},
+        io::Write,
+        path::PathBuf,
+    };
 
     use super::*;
 
-    fn update_path(dir: &str) -> std::ffi::OsString {
+    fn update_path(dir: &str) -> OsString {
         let path_orig = env::var_os("PATH").unwrap();
 
         let mut paths_vec = env::split_paths(&path_orig).collect::<Vec<_>>();
