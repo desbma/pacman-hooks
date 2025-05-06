@@ -2,18 +2,18 @@
 
 use std::{
     env, fmt, fs,
-    io::BufRead,
-    os::unix::fs::PermissionsExt,
+    io::BufRead as _,
+    os::unix::fs::PermissionsExt as _,
     path::{Path, PathBuf},
     process::Command,
-    str::FromStr,
+    str::FromStr as _,
     sync::Arc,
 };
 
 use ansi_term::Colour::Yellow;
-use anyhow::Context;
+use anyhow::Context as _;
 use glob::glob;
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{ParallelProgressIterator as _, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use simple_logger::SimpleLogger;
 
@@ -199,7 +199,7 @@ fn get_sd_enabled_service_links() -> anyhow::Result<Vec<PathBuf>> {
         .filter_map(|p| fs::read_dir(p.as_path()).ok())
         .flatten()
         .flatten()
-        .filter(|e| e.file_type().map_or(false, |f| f.is_symlink()))
+        .filter(|e| e.file_type().is_ok_and(|f| f.is_symlink()))
         .map(|f| f.path())
         .collect();
 
@@ -250,7 +250,7 @@ fn main() -> anyhow::Result<()> {
             |_| {
                 broken_python_packages = match get_python_version() {
                     Ok(current_python_version) => {
-                        log::debug!("Python version: {}", current_python_version);
+                        log::debug!("Python version: {current_python_version}");
                         match get_broken_python_packages(&current_python_version) {
                             Ok(ps) => Some(ps),
                             Err(err) => {
@@ -361,7 +361,7 @@ mod tests {
         env,
         ffi::OsString,
         fs::{File, Permissions},
-        io::Write,
+        io::Write as _,
         path::PathBuf,
     };
 
@@ -374,7 +374,10 @@ mod tests {
         paths_vec.insert(0, PathBuf::from(dir));
 
         let paths = env::join_paths(paths_vec).unwrap();
-        env::set_var("PATH", paths);
+        // SAFETY: actually unsafe, but tests only
+        unsafe {
+            env::set_var("PATH", paths);
+        }
 
         path_orig
     }
@@ -436,6 +439,9 @@ mod tests {
             ]
         );
 
-        env::set_var("PATH", path_orig);
+        // SAFETY: actually unsafe, but tests only
+        unsafe {
+            env::set_var("PATH", path_orig);
+        }
     }
 }
