@@ -141,7 +141,7 @@ fn get_package_executable_files(package: &str) -> anyhow::Result<Vec<PathBuf>> {
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to list files for package {:?} with pacman", package);
+        anyhow::bail!("Failed to list files for package {package:?} with pacman");
     }
 
     let files = output
