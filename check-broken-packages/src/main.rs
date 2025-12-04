@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_missing_dependencies() {
+    fn missing_dependencies() {
         let ldd_output = "	linux-vdso.so.1 (0x00007ffea89a7000)
 	libavdevice.so.57 => not found
 	libavfilter.so.6 => not found
