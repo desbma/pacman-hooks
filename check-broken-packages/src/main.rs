@@ -41,7 +41,7 @@ fn get_python_version() -> anyhow::Result<PythonPackageVersion> {
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!("Failed to query Python version with pacman",);
+        anyhow::bail!("Failed to query Python version with pacman");
     }
 
     let version_line = output
