@@ -16,16 +16,16 @@ strip = false
 debug = true
 
 [dependencies]
-anyhow = { version = "1.0.100", default-features = false, features = ["backtrace", "std"] }
-ansi_term = { version = "0.12.1", default-features = false }
+anyhow = { version = "1.0.102", default-features = false, features = ["backtrace", "std"] }
+colored = { version = "3.1.1", default-features = false }
 glob = { version = "0.3.3", default-features = false }
-indicatif = { version = "0.18.3", default-features = false, features = ["rayon"] }
+indicatif = { version = "0.18.4", default-features = false, features = ["rayon"] }
 log = { version = "0.4.29", default-features = false, features = ["max_level_debug", "release_max_level_info"] }
-rayon = { version = "1.11.0", default-features = false }
-simple_logger = { version = "5.1.0", default-features = false, features = ["colors", "stderr"] }
+rayon = { version = "1.12.0", default-features = false }
+simple_logger = { version = "5.2.0", default-features = false, features = ["colors", "stderr"] }
 
 [dev-dependencies]
-tempfile = { version = "3.23.0", default-features = false }
+tempfile = { version = "3.27.0", default-features = false }
 
 [lints.rust]
 # https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html

@@ -10,8 +10,8 @@ use std::{
     sync::Arc,
 };
 
-use ansi_term::Colour::Yellow;
 use anyhow::Context as _;
+use colored::Colorize as _;
 use glob::glob;
 use indicatif::{ParallelProgressIterator as _, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
@@ -327,28 +327,29 @@ fn main() -> anyhow::Result<()> {
     for (package, file, missing_dep) in &missing_deps {
         println!(
             "{}",
-            Yellow.paint(format!(
-                "File {file:?} from package {package:?} is missing dependency {missing_dep:?}"
-            ))
+            format!("File {file:?} from package {package:?} is missing dependency {missing_dep:?}")
+                .yellow()
         );
     }
 
     for (broken_python_package, dir) in broken_python_packages {
         println!(
             "{}",
-            Yellow.paint(format!(
+            format!(
                 "Package {broken_python_package:?} has files in directory {dir:?} that are ignored by the current Python interpreter"
-            ))
+            )
+            .yellow()
         );
     }
 
     for broken_sd_service_link in broken_sd_service_links {
         println!(
             "{}",
-            Yellow.paint(format!(
+            format!(
                 "Systemd enabled service has broken link in {:?}",
                 &broken_sd_service_link,
-            ))
+            )
+            .yellow()
         );
     }
 
