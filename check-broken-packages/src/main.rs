@@ -345,11 +345,8 @@ fn main() -> anyhow::Result<()> {
     for broken_sd_service_link in broken_sd_service_links {
         println!(
             "{}",
-            format!(
-                "Systemd enabled service has broken link in {:?}",
-                &broken_sd_service_link,
-            )
-            .yellow()
+            format!("Systemd enabled service has broken link in {broken_sd_service_link:?}")
+                .yellow()
         );
     }
 
