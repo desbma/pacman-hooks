@@ -24,9 +24,6 @@ log = { version = "0.4.33", default-features = false, features = ["max_level_deb
 rayon = { version = "1.12.0", default-features = false }
 simple_logger = { version = "5.2.0", default-features = false, features = ["colors", "stderr"] }
 
-[dev-dependencies]
-tempfile = { version = "3.27.0", default-features = false }
-
 [lints.rust]
 # https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
 explicit_outlives_requirements = "warn"
